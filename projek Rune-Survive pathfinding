@@ -1,0 +1,44 @@
+
+
+## Nästa 4-stegsplan
+
+1. **Berättelse och Questsystem**
+   - Implementera huvudberättelse med 3-aktars struktur
+   - Skapa questlogik med huvud- och sidoquests
+   - Designa NPC-system med dialogträd
+   - Utveckla miljöberättande genom runor och artefakter
+   - Skapa cutscenes för viktiga ögonblick
+
+2. **Avancerat Craftingsystem**
+   - Implementera resurssamlingsmekaniker
+   - Skapa tillverkningsprocess med recept och kvalitetskontroll
+   - Utveckla specialiserade yrkesvägar (smide, alkemi, etc.)
+   - Designa basbyggnadsmekanik
+   - Implementera spelardriven ekonomi
+
+
+3. **Dynamisk Värld**
+   - Implementera säsongssystem med unika utmaningar
+   - Skapa händelsedrivna uppdrag (invasjoner, bossar)
+   - Utveckla världsutvecklingssystem
+   - Implementera dag-natt-cykel med beteendeförändringar
+   - Skapa vädersystem med strategiska effekter
+
+4. **Karaktärsutveckling**
+   - Designa avancerade klasssystem med specialiseringar
+   - Implementera moralssystem med konsekvenser
+   - Skapa djupgående talangträd med synergier
+   - Utveckla utrustningsanpassningssystem
+   - Implementera följeslagarsystem med AI-kontroll
+
+## Statusöversikt
+
+| Område               | Status      | Framsteg | Mål                           |
+|----------------------|-------------|----------|-------------------------------|
+| Prestandaoptimering  | ✅ Färdig   | 100%     | 60 FPS, <100MB minne          |
+| Kollisionsdetektering| ✅ Färdig   | 100%     | <2ms/frame, 90% reduktion     |
+| Pathfinding          | 🚧 Pågående | 65%      | Intelligent fiendepositionering|
+| UI-förbättringar     | ⏳ Nästa    | 0%       | Intuitivt, responsivt gränssnitt|
+| Berättelsesystem     | ⌛ Planerad | 0%       | Engagerande värld och karaktärer|
+
+Genomförandet följer den strategiska planen med fokus på spelglädje och meningsfulla val. Varje steg bygger på det tidigare och skapar en solid grund för framtida utveckling.
