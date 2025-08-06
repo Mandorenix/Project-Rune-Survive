@@ -1,0 +1,173 @@
+# Utvecklingsplan för Project Rune-Survive
+
+## Prioriterad Utvecklingsplan
+
+### 1. Prestandaoptimering (Högsta prioritet)
+**Mål:** Säkerställ 60 FPS även på lägre enheter och minska minnesanvändning
+
+#### Steg:
+```markdown
+1. **Object Pooling Implementering (3 timmar)**
+   - Skapa pooler för fiender, projektiler och partiklar
+   - Ersätt `new Enemy()` med `enemyPool.get()`
+   - Implementera `release()` när objekt inte längre används
+
+2. **Batch Rendering (2 timmar)**
+   - Gruppera liknande renderingsanrop:
+     ```javascript
+     // Exempel: Batch-rendera alla XP-gems
+     ctx.beginPath();
+     xpGems.forEach(gem => {
+       ctx.moveTo(gem.x + gem.radius, gem.y);
+       ctx.arc(gem.x, gem.y, gem.radius, 0, Math.PI * 2);
+     });
+     ctx.fillStyle = '#fef08a';
+     ctx.fill();
+     ```
+
+3. **Minne och GC Optimering (2 timmar)**
+   - Identifiera minnesläckor med Chrome DevTools
+   - Reducera skapandet av temporära objekt i game loop
+   - Förallokera arrayer där möjligt
+
+4. **Dynamisk Entity Management (2 timmar)**
+   - Implementera "sleep"-läge för entiteter utanför skärmen
+   - Dynamisk uppdateringsfrekvens baserat på avstånd till spelare
+```
+
+### 2. Kollisionsdetektering (Hög prioritet)
+**Mål:** Förbättra noggrannhet och prestanda för kollisioner
+
+#### Steg:
+```markdown
+1. **QuadTree Implementering (3 timmar)**
+   - Skapa `quadtree.js` med Rectangle och QuadTree klasser
+   - Uppdatera quadtree varje frame:
+     ```javascript
+     quadtree.clear();
+     enemies.forEach(enemy => {
+       quadtree.insert(enemy.getCollisionRect());
+     });
+     ```
+
+2. **Hierarkisk Kollisionsdetektering (2 timmar)**
+   - Använd quadtree för bred-fas detektering
+   - Reservera smal-fas detektering för potentiella kollisioner
+
+3. **Optimera Kollisionsgeometri (1 timme)**
+   - Implementera cirkulära hitboxes för projektiler och fiender
+   - Använd bounding circles för snabba preliminära kontroller
+```
+
+### 3. Pathfinding (Medel prioritet)
+**Mål:** Ge fiender mer intelligenta rörelsemönster
+
+#### Steg:
+```markdown
+1. **A* Pathfinding Implementering (4 timmar)**
+   - Skapa `pathfinding.js` med A* implementation
+   - Generera navigationsgrid baserat på tile-map
+   - Begränsa pathfinding-uppdatering till 1-2 ggr/sekund
+
+2. **Waypoint-baserad rörelse (2 timmar)**
+   - Dela upp långa vägar i waypoints
+   - Implementera enkel steering behavior mellan waypoints
+
+3. **Fallback-mechanism (1 timme)**
+   - Direkt förföljning när pathfinding misslyckas
+   - Temporär ökad hastighet vid pathfinding-fel
+```
+
+### 4. UI-förbättringar (Medel prioritet)
+**Mål:** Förbättra användarupplevelse och tillgänglighet
+
+#### Steg:
+```markdown
+1. **Drag & Drop Inventory (3 timmar)**
+   - Implementera HTML5 drag and drop API
+   - Visuell feedback vid dra-över
+   - Animerade övergångar vid föremålsflytt
+
+2. **Minimap Implementering (2 timmar)**
+   - Skapa kompakt kartöversikt
+   - Dynamisk skalning baserat på zoomnivå
+   - Färgkodade markörer för spelare, fiender och viktiga objekt
+
+3. **Animerade UI-element (2 timmar)**
+   - GSAP-animationer för menyövergångar
+   - Partikeleffekter vid level up
+   - Subtila hover-effekter för knappar
+
+4. **Responsiv Design Förbättringar (2 timmar)**
+   - Anpassa UI-element för små skärmar
+   - Dynamisk knappstorlek baserat på enhetsupplösning
+   - Touch-vänliga tooltips
+```
+
+## Tidsplan och Resursallokering
+
+| Område               | Prioritering | Est. Timmar | Mån  | Tis  | Ons  | Tor  | Fre  |
+|----------------------|--------------|-------------|------|------|------|------|------|
+| Prestandaoptimering  | Högt         | 9h          | 3h   | 3h   | 3h   |      |      |
+| Kollisionsdetektering| Högt         | 6h          |      | 3h   | 3h   |      |      |
+| Pathfinding          | Medium       | 7h          |      |      | 1h   | 3h   | 3h   |
+| UI-förbättringar     | Medium       | 9h          |      |      |      | 3h   | 6h   |
+| **Totalt**           |              | **31h**     | 3h   | 6h   | 7h   | 6h   | 9h   |
+
+## Mätvärden för Framgång
+
+1. **Prestanda:**
+   - 60 FPS på mid-range mobilenheter
+   - Minne < 100MB efter 10 min spelande
+   - < 5ms per render-frame
+
+2. **Spelbarhet:**
+   - 95% mindre "stuck" fiender
+   - 50% färre falska kollisioner
+   - 30% snabbare inventory-hantering
+
+3. **Användarupplevelse:**
+   +15% i användartest för intuitivitet
+   -20% tid till första interaktion för nya spelare
+
+## Riskhantering
+
+| Risk                     | Förebyggande Åtgärd               | Kontingensplan               |
+|--------------------------|-----------------------------------|------------------------------|
+| Pathfinding för långsam  | Begränsa sökdjup                  | Fallback till enklare algoritm|
+| Minnesläckor             | Regelmässig profilering           | Auto-restart vid hög minne   |
+| Komplexitet i UI         | Prototypa först                   | Förenkla funktioner          |
+| Cross-browser problem    | Tidig testning på multipla enheter| Browser-specifika fixar      |
+
+## Leveranser
+
+1. **Sprint 1 (Vecka 1):** Prestandaoptimering + Kollisionsdetektering
+   - Object pooling implementerad
+   - QuadTree i produktion
+   - FPS-stabilitet på 60
+
+2. **Sprint 2 (Vecka 2):** Pathfinding + UI Grund
+   - A* fungerar i 90% av fallen
+   - Drag & drop inventory
+   - Minimap prototyp
+
+3. **Sprint 3 (Vecka 3):** UI-förbättringar + Polering
+   - Animerade övergångar
+   - Responsiv design justeringar
+   - Optimeringsjusteringar
+
+## Resurser
+
+- **Verktyg:** 
+  - Chrome DevTools för profilering
+  - GSAP för animationer
+  - Matter.js för fysiksimulering (endast om nödvändigt)
+
+- **Bibliotek:**
+  ```html
+  <!-- Lägg till i head -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
+  ```
+
+Denna plan ger en balanserad approach där kritiska prestanda- och spelbarhetsfrågor adresseras först, följt av funktionella förbättringar som ökar spelupplevelsen. Varje sektion är designad för att kunna implementeras oberoende och testas isolerat.
