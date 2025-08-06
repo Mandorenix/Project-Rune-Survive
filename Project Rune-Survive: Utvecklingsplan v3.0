@@ -1,57 +1,49 @@
 Project Rune-Survive: Utvecklingsplan v3.0
-
 Vision & Ledande Principer
-
 Vårt mål är att kombinera den beroendeframkallande actionen från Vampire Survivors med det djupa föremålssystemet från Diablo 2. Varje ny funktion ska fokusera på spelglädje, meningsfulla val och vara enkel att bygga vidare på.
 
 Prioriterad Utvecklingsordning
-
-1. Prestandaoptimering (Högsta prioritet)
-
+1. Prestandaoptimering (Högsta prioritet) - AVKLARAD
 Mål: Säkerställa en stabil och flytande spelupplevelse (60 FPS) på alla enheter genom att optimera minnesanvändning och renderingsprocessen.
 
 [x] Steg 1: Object Pooling: Skapa återanvändningsbara "pooler" för fiender, projektiler och partiklar för att drastiskt minska "skräp" i minnet.
 
-[ ] Steg 2: Batch Rendering: Gruppera rit-anrop till grafikkortet för att effektivisera hur spelet ritas upp på skärmen.
+[x] Steg 2: Batch Rendering: Gruppera rit-anrop till grafikkortet för att effektivisera hur spelet ritas upp på skärmen.
 
-[ ] Steg 3: Minneshantering: Identifiera och eliminera onödiga objekt-skapelser i huvudloopen för att förhindra att spelet saktar ner över tid.
+[x] Steg 3: Minneshantering: Identifiera och eliminera onödiga objekt-skapelser i huvudloopen för att förhindra att spelet saktar ner över tid.
 
-[ ] Steg 4: Dynamisk Entity Management: Införa ett "sömnläge" för fiender och objekt som är långt utanför skärmen så att de inte använder onödig processorkraft.
+[x] Steg 4: Dynamisk Entity Management: Införa ett "sömnläge" för fiender och objekt som är långt utanför skärmen så att de inte använder onödig processorkraft.
 
 2. Kollisionsdetektering (Hög prioritet)
-
 Mål: Implementera ett snabbt och exakt system för att hantera kollisioner mellan hundratals objekt.
 
-Steg 1: QuadTree Implementering: Bygga en datastruktur (QuadTree) som delar upp spelvärlden i mindre zoner för att snabbt kunna hitta närliggande objekt.
+[x] Steg 1: QuadTree Implementering: Bygga en datastruktur (QuadTree) som delar upp spelvärlden i mindre zoner för att snabbt kunna hitta närliggande objekt.
 
-Steg 2: Hierarkisk Kollisionsdetektering: Använda QuadTree för en snabb grovsortering och endast utföra exakta kollisionsberäkningar på de objekt som faktiskt riskerar att krocka.
+[ ] Steg 2: Hierarkisk Kollisionsdetektering: Använda QuadTree för en snabb grovsortering och endast utföra exakta kollisionsberäkningar på de objekt som faktiskt riskerar att krocka.
 
-Steg 3: Optimera Kollisionsgeometri: Byta ut fyrkantiga "hitboxes" mot mer effektiva cirkulära för bättre prestanda och mer träffsäker känsla.
+[ ] Steg 3: Optimera Kollisionsgeometri: Byta ut fyrkantiga "hitboxes" mot mer effektiva cirkulära för bättre prestanda och mer träffsäker känsla.
 
 3. Pathfinding (Medel prioritet)
-
 Mål: Ge fiender en mer intelligent och utmanande AI som kan navigera runt hinder.
 
-Steg 1: A Pathfinding Implementering:* Införa A*-algoritmen som låter fiender hitta den smartaste och kortaste vägen till spelaren.
+[ ] Steg 1: A Pathfinding Implementering:* Införa A*-algoritmen som låter fiender hitta den smartaste och kortaste vägen till spelaren.
 
-Steg 2: Waypoint-baserad rörelse: Få fiender att röra sig mjukt och naturligt längs den uträknade vägen.
+[ ] Steg 2: Waypoint-baserad rörelse: Få fiender att röra sig mjukt och naturligt längs den uträknade vägen.
 
-Steg 3: Fallback-mekanism: Se till att fiender fortfarande jagar spelaren även om pathfinding av någon anledning skulle misslyckas.
+[ ] Steg 3: Fallback-mekanism: Se till att fiender fortfarande jagar spelaren även om pathfinding av någon anledning skulle misslyckas.
 
 4. UI-förbättringar (Medel prioritet)
-
 Mål: Skapa ett modernt, snyggt och intuitivt användargränssnitt.
 
-Steg 1: Drag & Drop Inventory: Implementera ett smidigt inventarium där spelaren kan dra och släppa föremål.
+[ ] Steg 1: Drag & Drop Inventory: Implementera ett smidigt inventarium där spelaren kan dra och släppa föremål.
 
-Steg 2: Minimap Implementering: Skapa en minimikarta som visar spelarens och fiendernas positioner.
+[ ] Steg 2: Minimap Implementering: Skapa en minimikarta som visar spelarens och fiendernas positioner.
 
-Steg 3: Animerade UI-element: Lägga till animationer och effekter för att göra gränssnittet mer levande och tillfredsställande.
+[ ] Steg 3: Animerade UI-element: Lägga till animationer och effekter för att göra gränssnittet mer levande och tillfredsställande.
 
-Steg 4: Responsiv Design: Säkerställa att gränssnittet ser bra ut och är lätt att använda på både stora och små skärmar.
+[ ] Steg 4: Responsiv Design: Säkerställa att gränssnittet ser bra ut och är lätt att använda på både stora och små skärmar.
 
 Mätvärden för Framgång
-
 Prestanda: Stabil 60 FPS, minnesanvändning under 100MB.
 
 Spelbarhet: Fiender fastnar inte, kollisioner känns rättvisa.
