@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Project Rune-Survive: Stabilitetsfixar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        :root { --item-size: clamp(40px, 10vw, 55px); }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #1a202c; color: #e2e8f0;
+            font-family: 'Menlo', 'Consolas', monospace;
+            touch-action: none;
+        }
+        .game-container { width: 100%; height: 100%; position: relative; background-color: #386641; }
+        canvas { background-color: transparent; position: absolute; top: 0; left: 0; }
+        
+        /* --- Debug Panel --- */
+        #debug-panel {
+            position: fixed; top: 60px; left: 10px; z-index: 200;
+            background-color: rgba(0,0,0,0.7); padding: 0.5rem;
+            border-radius: 0.5rem; font-size: 0.8em;
+        }
+
+        /* --- Start Screen --- */
+        #start-screen { background-color: rgba(0, 0, 0, 0.9); z-index: 200; }
+        .start-button { padding: 1rem 2rem; font-size: 1.2rem; background-color: #2d3748; border: 2px solid #4a5568; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s; width: 80%; max-width: 300px; }
+        .start-button:hover { background-color: #4a5568; transform: scale(1.05); }
+
+        /* --- HUD --- */
+        .hud { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 10; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .info-panel { background-color: rgba(45, 55, 72, 0.8); padding: 0.5rem 1rem; border-radius: 0.5rem; text-align: center; margin: 0 auto; }
+        .hud-button { background-color: rgba(45, 55, 72, 0.8); border-radius: 0.5rem; padding: 0.5rem; cursor: pointer; border: 2px solid #4a5568; }
+        #xp-bar-container { position: absolute; bottom: 10px; left: 10%; right: 10%; height: 20px; background-color: rgba(45, 55, 72, 0.8); border-radius: 10px; border: 2px solid #4a5568; z-index: 10; }
+        #xp-bar { width: 0%; height: 100%; background-color: #fef08a; border-radius: 8px; transition: width 0.2s ease-in-out; }
+        
+        /* --- Pop-up Screens --- */
+        .popup-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); z-index: 30; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1rem; }
+        .upgrade-card { background-color: #2d3748; border: 2px solid #4a5568; border-radius: 0.5rem; text-align: center; cursor: pointer; transition: background-color 0.2s, transform 0.2s, border-color 0.2s; padding: 1rem; width: 90%; max-width: 350px; }
+        .upgrade-card.selected { border-color: #facc15; transform: scale(1.05); }
+        .upgrade-card:hover, .upgrade-card:active { background-color: #4a5568; }
+
+        /* --- Level Up Screen --- */
+        #level-up-container { display: flex; flex-direction: column; align-items: center; gap: 1rem; width: 100%; padding: 1rem; }
+        @media (min-width: 1024px) { #level-up-container { flex-direction: row; justify-content: center; align-items: flex-start; } }
+        #upgrade-columns { display: flex; flex-direction: column; gap: 1rem; width: 100%; }
+        @media (min-width: 1024px) { #upgrade-columns { flex-direction: row; justify-content: center; gap: 2rem; } }
+        .upgrade-column { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 350px; }
+        .attribute-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0.25rem 0; }
+        .attribute-points-display { font-weight: bold; color: #facc15; }
+        .attr-button { background-color: #4a5568; border-radius: 50%; width: 2rem; height: 2rem; font-weight: bold; cursor: pointer; }
+        .attr-button:disabled { background-color: #2d3748; color: #6b7280; cursor: not-allowed; }
+        #confirm-level-up-button:disabled { background-color: #2d3748; color: #6b7280; cursor: not-allowed; }
+
+        /* --- Character Sheet Screen --- */
+        #character-sheet-screen { padding: 1rem; flex-direction: row; flex-wrap: wrap; overflow-y: auto; }
+        .character-sheet-container { display: flex; flex-direction: column; gap: 1rem; width: 95%; max-width: 800px; background-color: rgba(23, 33, 48, 0.9); padding: 1rem; border-radius: 0.5rem; }
+        @media (min-width: 768px) { .character-sheet-container { flex-direction: row; } }
+        .equipment-panel, .inventory-panel, .stats-panel { flex: 1; padding: 0.5rem; }
+        .equipment-slots { display: grid; grid-template-columns: var(--item-size) var(--item-size); grid-template-rows: repeat(4, var(--item-size)); gap: 0.5rem; justify-content: center; align-items: center; }
+        #head-slot { grid-column: 1 / 3; grid-row: 1; justify-self: center; }
+        #amulet-slot { grid-column: 1; grid-row: 2; justify-self: end; }
+        #chest-slot { grid-column: 2; grid-row: 2; justify-self: start; }
+        #weapon-slot { grid-column: 1; grid-row: 3; justify-self: end; }
+        #boots-slot { grid-column: 1 / 3; grid-row: 4; justify-self: center; }
+        .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--item-size), 1fr)); gap: 0.5rem; }
+        .inventory-slot { width: var(--item-size); height: var(--item-size); display: flex; justify-content: center; align-items: center; position: relative; background-color: #2d3748; border: 2px solid #4a5568; border-radius: 0.5rem; cursor: pointer; }
+        .inventory-slot img { width: 80%; height: 80%; object-fit: contain; pointer-events: none; }
+        .inventory-slot.magic { border-color: #60a5fa; }
+        .inventory-slot.rare { border-color: #facc15; }
+        .inventory-slot.unique { border-color: #eab308; }
+        .stats-list { font-size: 0.9em; }
+        .stats-list div { display: flex; justify-content: space-between; }
+
+        /* --- Tooltip --- */
+        #tooltip { position: fixed; display: none; background-color: rgba(23, 33, 48, 0.95); border: 1px solid #4a5568; border-radius: 0.5rem; padding: 0.75rem; width: 220px; z-index: 100; pointer-events: none; color: #e2e8f0; }
+        #tooltip-name { font-weight: bold; }
+        .magic-name { color: #60a5fa; }
+        .rare-name { color: #facc15; }
+        .unique-name { color: #eab308; }
+        #tooltip-type { font-style: italic; color: #94a3b8; font-size: 0.9em; margin-bottom: 0.5rem; }
+        #tooltip-desc { font-size: 0.9em; }
+        #tooltip-stats { margin-top: 0.5rem; font-size: 0.9em; color: #60a5fa; }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="tooltip">
+        <div id="tooltip-name"></div>
+        <div id="tooltip-type"></div>
+        <div id="tooltip-desc"></div>
+        <div id="tooltip-stats"></div>
+    </div>
+    
+    <div id="start-screen" class="popup-screen">
+        <h1 class="text-4xl font-bold text-yellow-300">Project Rune-Survive</h1>
+        <p class="text-gray-400 mb-4">Välj kontrollsätt</p>
+        <button id="start-button-mobile" class="start-button">📱 Spela på Mobil</button>
+        <div class="flex flex-col items-center gap-2 w-full max-w-[300px]">
+            <button id="start-button-pc" class="start-button w-full">💻 Spela på PC</button>
+            <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" id="pc-auto-attack-toggle"> Auto-attack</label>
+        </div>
+    </div>
+
+    <div id="debug-panel" class="hidden">
+        <div>FPS: <span id="debug-fps">0</span></div>
+        <div>Entiteter: <span id="debug-entities">0</span></div>
+        <div>Spelare X: <span id="debug-player-x">0</span></div>
+        <div>Spelare Y: <span id="debug-player-y">0</span></div>
+        <label><input type="checkbox" id="debug-collisions-toggle"> Visa Kollisioner</label>
+    </div>
+
+    <div class="hud">
+        <div class="info-panel">
+            <span class="font-bold">Hälsa: <span id="health-display">100 / 100</span></span> |
+            <span class="font-bold">Nivå: <span id="level">1</span></span>
+        </div>
+        <div class="flex gap-2">
+            <button id="zoom-button" class="hud-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+            </button>
+            <button id="inventory-button" class="hud-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"></path><path d="M12 12c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z"></path></svg>
+            </button>
+            <button id="mute-button" class="hud-button">
+                <svg id="icon-unmuted" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                <svg id="icon-muted" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+            </button>
+        </div>
+    </div>
+    
+    <div id="xp-bar-container"><div id="xp-bar"></div></div>
+    <div id="joystick-base"></div>
+
+    <div id="level-up-screen" class="popup-screen hidden">
+        <h2 class="text-3xl font-bold text-yellow-300 mb-4">LEVEL UP!</h2>
+        <div id="level-up-container">
+            <div id="upgrade-columns">
+                <div class="upgrade-column" id="upgrade-col-1"></div>
+                <div id="attribute-points-section" class="upgrade-card order-first lg:order-none">
+                    <h3 class="text-xl font-bold mb-2">Fördela Attributpoäng</h3>
+                    <p class="mb-4">Poäng kvar: <span id="attribute-points-display" class="attribute-points-display">5</span></p>
+                    <div id="attribute-allocator"></div>
+                </div>
+                <div class="upgrade-column" id="upgrade-col-2"></div>
+            </div>
+        </div>
+        <button id="confirm-level-up-button" class="hud-button mt-4" disabled>Klar</button>
+    </div>
+
+    <div id="character-sheet-screen" class="popup-screen hidden">
+        <h2 id="paused-text" class="text-6xl font-bold text-gray-400 opacity-50 absolute">PAUSAD</h2>
+        <div class="character-sheet-container">
+            <div class="stats-panel">
+                <h2 class="text-xl font-bold mb-4 text-center">Attribut</h2>
+                <div class="stats-list" id="stats-list"></div>
+            </div>
+            <div class="equipment-panel">
+                <div class="equipment-slots">
+                    <div id="head-slot" class="inventory-slot" data-slot-type="head"></div>
+                    <div id="amulet-slot" class="inventory-slot" data-slot-type="amulet"></div>
+                    <div id="chest-slot" class="inventory-slot" data-slot-type="chest"></div>
+                    <div id="weapon-slot" class="inventory-slot" data-slot-type="weapon"></div>
+                    <div id="boots-slot" class="inventory-slot" data-slot-type="boots"></div>
+                </div>
+            </div>
+            <div class="inventory-panel">
+                <h2 class="text-xl font-bold mb-4 text-center">Ryggsäck</h2>
+                <div id="inventory-grid" class="inventory-grid"></div>
+            </div>
+        </div>
+        <button id="close-character-sheet-button" class="hud-button mt-4">Stäng</button>
+    </div>
+</div>
+
+<script>
+// =================================================================================
+// --- SETUP & GLOBALS ---
+// =================================================================================
+const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+const healthDisplay = document.getElementById('health-display');
+const levelEl = document.getElementById('level'); const xpBar = document.getElementById('xp-bar');
+const levelUpScreen = document.getElementById('level-up-screen'); 
+const characterSheetScreen = document.getElementById('character-sheet-screen'); const inventoryButton = document.getElementById('inventory-button');
+const closeCharacterSheetButton = document.getElementById('close-character-sheet-button');
+const muteButton = document.getElementById('mute-button'); const iconUnmuted = document.getElementById('icon-unmuted'); const iconMuted = document.getElementById('icon-muted');
+const startScreen = document.getElementById('start-screen'); 
+const startButtonMobile = document.getElementById('start-button-mobile');
+const startButtonPC = document.getElementById('start-button-pc');
+const pcAutoAttackToggle = document.getElementById('pc-auto-attack-toggle');
+const inventoryGrid = document.getElementById('inventory-grid'); const statsList = document.getElementById('stats-list');
+const equipmentSlots = { head: document.getElementById('head-slot'), chest: document.getElementById('chest-slot'), weapon: document.getElementById('weapon-slot'), boots: document.getElementById('boots-slot'), amulet: document.getElementById('amulet-slot'), };
+const joystickBase = document.getElementById('joystick-base');
+const tooltip = document.getElementById('tooltip'); const tooltipName = document.getElementById('tooltip-name'); const tooltipType = document.getElementById('tooltip-type'); const tooltipDesc = document.getElementById('tooltip-desc'); const tooltipStats = document.getElementById('tooltip-stats');
+const attributePointsDisplay = document.getElementById('attribute-points-display');
+const attributeAllocator = document.getElementById('attribute-allocator');
+const confirmLevelUpButton = document.getElementById('confirm-level-up-button');
+const debugPanel = document.getElementById('debug-panel');
+const debugFps = document.getElementById('debug-fps');
+const debugEntities = document.getElementById('debug-entities');
+const debugPlayerX = document.getElementById('debug-player-x');
+const debugPlayerY = document.getElementById('debug-player-y');
+const debugCollisionsToggle = document.getElementById('debug-collisions-toggle');
+const zoomButton = document.getElementById('zoom-button');
+
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+
+// --- Game Settings ---
+const zoomLevels = [0.6, 0.4, 0.3]; // Nära, mellan, långt
+let currentZoomIndex = 1;
+let zoomLevel = zoomLevels[currentZoomIndex];
+const LOOT_CHANCE = 0.6;
+const RARE_CHANCE = 0.2;
+const MAGIC_CHANCE = 0.6;
+
+// --- Game State ---
+let score = 0, playerHealth = 100, level = 1, xp = 0, xpToNextLevel = 100;
+let isGameOver = false, isPaused = false;
+let activeAttacks = [], enemies = [], particles = [], xpGems = [], droppedItems = [], damageNumbers = [];
+let attackCooldown = 40, attackTimer = 0, enemySpawnCooldown = 60, enemySpawnTimer = 0;
+const joystick = { active: false, angle: 0, baseX: 0, baseY: 0, maxDist: 60, touchId: null };
+let attributePointsToSpend = 0;
+let tempAttributeAllocation = {};
+let isDebugMode = false;
+let showCollisions = false;
+let controlScheme = ''; // 'mobile' or 'pc'
+let pcAutoAttack = false;
+const keysPressed = {};
+const mousePos = { x: 0, y: 0 };
+let selectedUpgradeToApply = null;
+let soundTimeOffset = 0;
+const SOUND_TIME_STEP = 0.01; // 10ms
+
+// =================================================================================
+// --- AUDIO SYSTEM ---
+// =================================================================================
+let audioReady = false;
+let synths = {};
+let music = {};
+
+function setupAudio() {
+    synths = {
+        hit: new Tone.MembraneSynth().toDestination(),
+        shoot: new Tone.PluckSynth({ volume: -10 }).toDestination(),
+        fireball: new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0 }, volume: -5 }).toDestination(),
+        melee: new Tone.MetalSynth({ frequency: 50, envelope: { attack: 0.001, decay: 0.1, release: 0.01 }, harmonicity: 3.1, modulationIndex: 32, resonance: 4000, octaves: 1.5, volume: -15 }).toDestination(),
+        xp: new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }, volume: -20 }).toDestination(),
+        levelUp: new Tone.FMSynth({ harmonicity: 3, modulationIndex: 10, detune: 0, oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 1 }, modulation: { type: 'square' }, modulationEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 1 }, volume: -10 }).toDestination(),
+        equip: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 }, volume: -15 }).toDestination(),
+        enemyDeath: new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.1 }, volume: -10 }).toDestination(),
+        playerHurt: new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.5 }, volume: -5 }).toDestination(),
+    };
+    music = {
+        synth: new Tone.AMSynth({ harmonicity: 1.2, detune: 0, oscillator: { type: 'fatsine' }, envelope: { attack: 0.01, decay: 2, sustain: 0.1, release: 2 }, modulation: { type: 'square' }, modulationEnvelope: { attack: 0.5, decay: 1, sustain: 0.5, release: 2 }, volume: -25 }).toDestination(),
+        pattern: null,
+        notes: ['C2', 'D2', 'E2', 'G2', 'A2', 'C3'].sort(() => 0.5 - Math.random())
+    };
+}
+
+function playSound(sound, note = 'C4', duration = '8n') {
+    if (!audioReady || !synths[sound]) return;
+    const time = Tone.now() + soundTimeOffset;
+    soundTimeOffset += SOUND_TIME_STEP;
+
+    if (sound === 'shoot') {
+        synths[sound].triggerAttack(note, time);
+    } else if (sound === 'fireball' || sound === 'enemyDeath') {
+        synths[sound].triggerAttackRelease(duration, time);
+    } else if (synths[sound].triggerAttackRelease) {
+        synths[sound].triggerAttackRelease(note, duration, time);
+    }
+}
+
+function startAudioAndGame(scheme) {
+    controlScheme = scheme;
+    pcAutoAttack = pcAutoAttackToggle.checked;
+    if (audioReady) return;
+    Tone.start().then(() => {
+        audioReady = true;
+        setupAudio();
+        Tone.Transport.start();
+        music.pattern = new Tone.Pattern((time, note) => { music.synth.triggerAttackRelease(note, '1n', time); }, music.notes, 'randomWalk').start(0);
+        music.pattern.interval = '1n';
+        
+        startScreen.style.display = 'none';
+        setupInputListeners();
+        animate(); // Start the game loop
+    });
+}
+startButtonMobile.addEventListener('click', () => startAudioAndGame('mobile'));
+startButtonPC.addEventListener('click', () => startAudioAndGame('pc'));
+muteButton.addEventListener('click', () => { if(audioReady) { Tone.getDestination().mute = !Tone.getDestination().mute; iconUnmuted.classList.toggle('hidden'); iconMuted.classList.toggle('hidden'); } });
+
+// =================================================================================
+// --- ITEM DATABASE (Unchanged) ---
+// =================================================================================
+const itemDB = {
+    'sword': { name: 'Enkelt Svärd', type: 'Vapen', slot: 'weapon', desc: 'En snabb, svepande närstridsattack.', attackType: 'melee', sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48bGluZSB4MT0iMiIgeTE9IjIyIiB4Mj0iMjIiIHkyPSIyIj48L2xpbmU+PGxpbmUgeDE9IjIiIHkyPSIxNCIgeDI9IjEwIiB5MT0iMjIiPjwvbGluZT48bGluZSB4MT0iMTQiIHkyPSIyIiB4Mj0iMjIiIHkxPSIxMCI+PC9saW5lPjwvc3ZnPg==' },
+    'staff': { name: 'Lärlingsstav', type: 'Vapen', slot: 'weapon', desc: 'Skjuter en långsam men kraftfull eldboll.', attackType: 'fireball', sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48bGluZSB4MT0iMiIgeTE9IjIyIiB4Mj0iMjIiIHkyPSIyIj48L2xpbmU+PGNpcmNsZSBjeD0iMjAuNSIgY3k9IjMuNSIgcj0iMi41Ij48L2NpcmNsZT48L3N2Zz4=' },
+    'leather_helmet': { name: 'Läderhjälm', type: 'Hjälm', slot: 'head', desc: 'En enkel hjälm som ger ett visst skydd.', baseStats: { vitality: 5 }, sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA4bDYtNmw2IDZ2OGgtMTJ6Ij48L3BhdGg+PC9zdmc+' },
+    'iron_armor': { name: 'Järnrustning', type: 'Rustning', slot: 'chest', desc: 'Tung rustning som avsevärt ökar din överlevnadsförmåga.', baseStats: { vitality: 10 }, sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgMkwzIDdsMiA5aDE0bDIgLTl6Ij48L3BhdGg+PC9zdmc+' },
+    'swift_boots': { name: 'Snabba Stövlar', type: 'Stövlar', slot: 'boots', desc: 'Lätta stövlar som låter dig röra dig snabbare.', baseStats: { dexterity: 5 }, sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjAgOWwtMiA5SDEybC0yLTlIMjB6TTQgMjBoMTZ2Mkg0eiI+PC9wYXRoPjwvc3ZnPg==' },
+    'amulet_of_power': { name: 'Styrkeamulett', type: 'Amulett', slot: 'amulet', desc: 'En amulett som pulserar av rå kraft.', baseStats: { strength: 5, intelligence: 5 }, sprite: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTEuNSA4LjVMOSA1bC0yLjUgMy41TDIgNWwtLjUgMy41TDUgMTFsLTItMy41Ii8+PHBhdGggZD0iTTE4IDVsLTYgNSIvPjxwYXRoIGQ9Ik0xMi41IDE1LjVMMTUgMTlsMi41LTMuNUwyMiAxOWwuNS0zLjVMMTkgMTNsMi0zLjUiLz48L3N2Zz4=' }
+};
+const lootTable = Object.keys(itemDB);
+const AFFIXES = {
+    prefix: [ { name: 'Stark', stats: { strength: 5 } }, { name: 'Smidig', stats: { dexterity: 5 } }, { name: 'Hälsosam', stats: { vitality: 5 } }, { name: 'Klok', stats: { intelligence: 5 } } ],
+    suffix: [ { name: 'av Jägaren', stats: { magicFind: 10 } }, { name: 'av Regeneration', stats: { healthRegen: 1 } }, { name: 'av Tjuven', stats: { lifeLeech: 1 } } ]
+};
+
+// =================================================================================
+// --- MAP GENERATION & RENDERING (Unchanged) ---
+// =================================================================================
+const TILE_SIZE = 40;
+const MAP_WIDTH_TILES = 400; const MAP_HEIGHT_TILES = 320;
+const worldBounds = { width: MAP_WIDTH_TILES * TILE_SIZE, height: MAP_HEIGHT_TILES * TILE_SIZE };
+let mapGrid = []; let colliders = [];
+const TILE_TYPES = { GRASS: { char: '.', color: '#6a994e', solid: false }, FOREST: { char: '▓', color: '#2b580c', solid: true }, WATER: { char: '~', color: '#4cc9f0', solid: true }, ROCK: { char: '^', color: '#6c757d', solid: true }, BRIDGE: { char: '=', color: '#a68a64', solid: false }, SAND: { char: '∴', color: '#f4e285', solid: false }, RUIN_WALL: { char: '#', color: '#525252', solid: true }, RUIN_FLOOR: { char: '░', color: '#8d8d8d', solid: false }, ORE: { char: '$', color: '#eac435', solid: true }, MOUNTAIN: { char: '▲', color: '#495057', solid: true }, MUD: { char: '%', color: '#582f0e', solid: false, speedModifier: 0.6 }, ANCIENT_ROAD: { char: '#', color: '#495057', solid: false, speedModifier: 1.2 }, FLOWER: { char: "'", color: '#ffc6ff', solid: false }, BUSH: { char: '*', color: '#588157', solid: false } };
+const mapCanvas = document.createElement('canvas');
+mapCanvas.width = worldBounds.width;
+mapCanvas.height = worldBounds.height;
+const mapCtx = mapCanvas.getContext('2d');
+function generateMap() { mapGrid = []; colliders = []; const seed = Math.random(); const elevationNoise = new SimplexNoise(seed); const moistureNoise = new SimplexNoise(seed + 1); const oreNoise = new SimplexNoise(seed + 2); const featureNoise = new SimplexNoise(seed + 3); for (let y = 0; y < MAP_HEIGHT_TILES; y++) { const row = []; for (let x = 0; x < MAP_WIDTH_TILES; x++) { const nx = x / MAP_WIDTH_TILES - 0.5; const ny = y / MAP_HEIGHT_TILES - 0.5; const elev = elevationNoise.noise2D(nx * 5, ny * 5); const moist = moistureNoise.noise2D(nx * 3, ny * 3); let tile = TILE_TYPES.GRASS; if (elev < -0.4) { tile = TILE_TYPES.WATER; } else if (elev < -0.3) { tile = TILE_TYPES.SAND; } else if (elev > 0.5) { tile = TILE_TYPES.MOUNTAIN; } else if (elev > 0.3) { tile = TILE_TYPES.ROCK; } else { if (moist > 0.3) { tile = TILE_TYPES.FOREST; } else if (moist < -0.4) { tile = TILE_TYPES.MUD; } else { tile = TILE_TYPES.GRASS; } } row.push(tile); } mapGrid.push(row); } generateRivers(); generateRoads(featureNoise); generateRuins(); generateOre(oreNoise); generateFlora(featureNoise); createBorder(); for (let y = 0; y < MAP_HEIGHT_TILES; y++) { for (let x = 0; x < MAP_WIDTH_TILES; x++) { if (mapGrid[y][x].solid) { colliders.push({ x: x * TILE_SIZE - worldBounds.width / 2, y: y * TILE_SIZE - worldBounds.height / 2, width: TILE_SIZE, height: TILE_SIZE }); } } } preRenderMap(); }
+function generateRivers() { const riverStart = { x: 0, y: Math.floor(Math.random() * MAP_HEIGHT_TILES) }; let currentX = riverStart.x; let currentY = riverStart.y; for(let i=0; i<MAP_WIDTH_TILES * 2; i++) { if (currentX < 0 || currentX >= MAP_WIDTH_TILES || currentY < 0 || currentY >= MAP_HEIGHT_TILES) break; const tile = mapGrid[currentY][currentX]; if (tile === TILE_TYPES.MOUNTAIN || tile === TILE_TYPES.ROCK) {} else if (Math.random() < 0.1) { mapGrid[currentY][currentX] = TILE_TYPES.BRIDGE; } else { mapGrid[currentY][currentX] = TILE_TYPES.WATER; } currentX += Math.floor(Math.random() * 3) - 1 + 1; currentY += Math.floor(Math.random() * 3) - 1; } }
+function generateRoads(noise) { for (let y = 0; y < MAP_HEIGHT_TILES; y++) { for (let x = 0; x < MAP_WIDTH_TILES; x++) { const value = noise.noise2D(x/100, y/100); if (value > 0.6 && !mapGrid[y][x].solid) { mapGrid[y][x] = TILE_TYPES.ANCIENT_ROAD; } } } }
+function generateRuins() { const ruinX = Math.floor(Math.random() * (MAP_WIDTH_TILES - 20)) + 10; const ruinY = Math.floor(Math.random() * (MAP_HEIGHT_TILES - 20)) + 10; const ruinWidth = 10 + Math.floor(Math.random() * 10); const ruinHeight = 10 + Math.floor(Math.random() * 10); for (let y = ruinY; y < ruinY + ruinHeight; y++) { for (let x = ruinX; x < ruinX + ruinWidth; x++) { if (x >= MAP_WIDTH_TILES || y >= MAP_HEIGHT_TILES) continue; if (x === ruinX || x === ruinX + ruinWidth - 1 || y === ruinY || y === ruinY + ruinHeight - 1) { if (Math.random() > 0.3) mapGrid[y][x] = TILE_TYPES.RUIN_WALL; } else { if (Math.random() > 0.1) mapGrid[y][x] = TILE_TYPES.RUIN_FLOOR; } } } }
+function generateOre(oreNoise) { for (let y = 0; y < MAP_HEIGHT_TILES; y++) { for (let x = 0; x < MAP_WIDTH_TILES; x++) { if (mapGrid[y][x] === TILE_TYPES.ROCK || mapGrid[y][x] === TILE_TYPES.MOUNTAIN) { const value = oreNoise.noise2D(x / 10, y / 10); if (value > 0.7) { mapGrid[y][x] = TILE_TYPES.ORE; } } } } }
+function generateFlora(noise) { for (let y = 0; y < MAP_HEIGHT_TILES; y++) { for (let x = 0; x < MAP_WIDTH_TILES; x++) { if (mapGrid[y][x] === TILE_TYPES.GRASS) { const value = noise.noise2D(x/5, y/5); if (value > 0.7) mapGrid[y][x] = TILE_TYPES.BUSH; else if (value < -0.7) mapGrid[y][x] = TILE_TYPES.FLOWER; } } } }
+function createBorder() { for (let y = 0; y < MAP_HEIGHT_TILES; y++) { mapGrid[y][0] = TILE_TYPES.MOUNTAIN; mapGrid[y][MAP_WIDTH_TILES - 1] = TILE_TYPES.MOUNTAIN; } for (let x = 0; x < MAP_WIDTH_TILES; x++) { mapGrid[0][x] = TILE_TYPES.MOUNTAIN; mapGrid[MAP_HEIGHT_TILES - 1][x] = TILE_TYPES.MOUNTAIN; } }
+function preRenderMap() {
+    mapCtx.font = `${TILE_SIZE * 0.8}px 'Menlo', 'Consolas', monospace`;
+    mapCtx.textAlign = 'center'; mapCtx.textBaseline = 'middle';
+    for (let y = 0; y < MAP_HEIGHT_TILES; y++) {
+        for (let x = 0; x < MAP_WIDTH_TILES; x++) {
+            const tile = mapGrid[y][x];
+            const worldX = x * TILE_SIZE;
+            const worldY = y * TILE_SIZE;
+            mapCtx.fillStyle = tile.color;
+            mapCtx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+            if (tile.char !== ' ') {
+                mapCtx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                mapCtx.fillText(tile.char, worldX + TILE_SIZE / 2, worldY + TILE_SIZE / 2);
+            }
+        }
+    }
+}
+function drawMap() {
+    const sourceX = player.x + worldBounds.width / 2 - (canvas.width / zoomLevel) / 2;
+    const sourceY = player.y + worldBounds.height / 2 - (canvas.height / zoomLevel) / 2;
+    const sourceWidth = canvas.width / zoomLevel;
+    const sourceHeight = canvas.height / zoomLevel;
+    ctx.drawImage(mapCanvas, sourceX, sourceY, sourceWidth, sourceHeight, player.x - sourceWidth/2, player.y - sourceHeight/2, sourceWidth, sourceHeight);
+}
+
+
+// =================================================================================
+// --- GAME CLASSES (Unchanged) ---
+// =================================================================================
+class Player { constructor(x, y, size, color) { this.x=x; this.y=y; this.size=size; this.color=color; this.baseAttributes={strength:5, dexterity:5, vitality:5, intelligence:5}; this.attributes={...this.baseAttributes}; this.derivedStats={}; this.vx=0; this.vy=0; this.friction=0.1; this.magnetRadius=100; this.inventory=[]; this.equipment={head:null, chest:null, weapon:null, boots:null, amulet:null}; } draw() { const healthPercentage=playerHealth/this.derivedStats.maxHealth; ctx.fillStyle=`rgba(59, 130, 246, ${0.5 + healthPercentage * 0.5})`; ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size); ctx.fillStyle='#fef08a'; ctx.font=`bold ${this.size}px 'Menlo', 'Consolas', monospace`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('@', this.x, this.y + 2); } update() { let targetVx=0; let targetVy=0; if (controlScheme === 'pc') { if (keysPressed['w']) targetVy = -this.derivedStats.maxSpeed; if (keysPressed['s']) targetVy = this.derivedStats.maxSpeed; if (keysPressed['a']) targetVx = -this.derivedStats.maxSpeed; if (keysPressed['d']) targetVx = this.derivedStats.maxSpeed; } else if (joystick.active) { targetVx=Math.cos(joystick.angle)*this.derivedStats.maxSpeed; targetVy=Math.sin(joystick.angle)*this.derivedStats.maxSpeed; } this.vx+=(targetVx-this.vx)*this.friction; this.vy+=(targetVy-this.vy)*this.friction; let nextX=this.x+this.vx; let nextY=this.y+this.vy; for (const collider of colliders) { if (nextX - this.size/2 < collider.x + collider.width && nextX + this.size/2 > collider.x && this.y - this.size/2 < collider.y + collider.height && this.y + this.size/2 > collider.y) { this.vx=0; nextX=this.x; break; } } for (const collider of colliders) { if (this.x - this.size/2 < collider.x + collider.width && this.x + this.size/2 > collider.x && nextY - this.size/2 < collider.y + collider.height && nextY + this.size/2 > collider.y) { this.vy=0; nextY=this.y; break; } } this.x=nextX; this.y=nextY; } }
+class Enemy { constructor(x, y, size, color, speed, char = 'g', health = 1) { this.x=x; this.y=y; this.size=size; this.color=color; this.speed=speed; this.char=char; this.health=health; this.maxHealth=health; } draw() { ctx.fillStyle = this.color; ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size); ctx.fillStyle = '#1a202c'; ctx.font = `bold ${this.size}px 'Menlo', 'Consolas', monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.char, this.x, this.y + 2); } update() { const angle=Math.atan2(player.y - this.y, player.x - this.x); let nextX=this.x+Math.cos(angle)*this.speed; let nextY=this.y+Math.sin(angle)*this.speed; let collided=false; for (const collider of colliders) { if (nextX - this.size/2 < collider.x + collider.width && nextX + this.size/2 > collider.x && nextY - this.size/2 < collider.y + collider.height && nextY + this.size/2 > collider.y) { collided=true; break; } } if (!collided) { this.x=nextX; this.y=nextY; } this.draw(); } }
+class Projectile { constructor(x, y, radius, color, velocity, duration = 120) { this.x=x; this.y=y; this.radius=radius; this.color=color; this.velocity=velocity; this.duration=duration; this.life=0; } draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); } update() { this.draw(); this.x += this.velocity.x; this.y += this.velocity.y; this.life++; } }
+class MeleeSweep { constructor(x, y, angle) { this.x=x; this.y=y; this.angle=angle; this.radius=50; this.duration=10; this.life=0; this.hitEnemies=[]; } draw() { this.x = player.x; this.y = player.y; const startAngle = this.angle - Math.PI / 4; const endAngle = this.angle + Math.PI / 4; ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.arc(this.x, this.y, this.radius, startAngle, endAngle); ctx.closePath(); ctx.fillStyle = `rgba(200, 200, 200, ${0.5 * (1 - this.life / this.duration)})`; ctx.fill(); } update() { this.draw(); this.life++; } }
+class XPGem { constructor(x, y, value) { this.x=x; this.y=y; this.value=value; this.radius=5; this.color='#fef08a'; } draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); } update() { const dist = Math.hypot(player.x - this.x, player.y - this.y); if (dist < player.magnetRadius) { const angle = Math.atan2(player.y - this.y, player.x - this.x); const speed = 5 * (1 - dist / player.magnetRadius); this.x += Math.cos(angle) * speed; this.y += Math.sin(angle) * speed; } this.draw(); } }
+class Particle { constructor(x, y, radius, color, velocity) { this.x=x; this.y=y; this.radius=radius; this.color=color; this.velocity=velocity; this.alpha=1; } draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.restore(); } update() { this.draw(); this.velocity.x *= 0.99; this.velocity.y *= 0.99; this.x += this.velocity.x; this.y += this.velocity.y; this.alpha -= 0.02; } }
+class DroppedItem { constructor(x, y, itemInstance) { this.x=x; this.y=y; this.item=itemInstance; this.size=30; this.img=new Image(); this.img.src=itemDB[this.item.baseId].sprite; this.life=0; } draw() { ctx.drawImage(this.img, this.x - this.size/2, this.y - this.size/2, this.size, this.size); if (this.item.rarity === 'magic' || this.item.rarity === 'rare' || this.item.rarity === 'unique') { const color = this.item.rarity === 'magic' ? 'rgba(96, 165, 250, 0.5)' : this.item.rarity === 'rare' ? 'rgba(250, 204, 21, 0.5)' : 'rgba(234, 179, 8, 0.5)'; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size * (1 + Math.sin(this.life / 10) * 0.2), 0, Math.PI * 2); ctx.fill(); } } update() { this.life++; this.draw(); } }
+class DamageNumber { constructor(x, y, amount, isCrit) { this.x=x; this.y=y; this.amount=amount; this.isCrit=isCrit; this.life=0; this.duration=60; } draw() { const alpha = 1 - (this.life / this.duration); ctx.globalAlpha = alpha; ctx.fillStyle = this.isCrit ? '#facc15' : '#ffffff'; ctx.font = `bold ${this.isCrit ? 24 : 18}px 'Menlo', 'Consolas', monospace`; ctx.fillText(this.amount, this.x, this.y); ctx.globalAlpha = 1.0; } update() { this.y -= 0.5; this.life++; this.draw(); } }
+
+// =================================================================================
+// --- INITIALIZATION ---
+// =================================================================================
+function findValidSpawnPoint() { let x, y; for (let i = 0; i < 100; i++) { const tileX = Math.floor(MAP_WIDTH_TILES / 2 + (Math.random() - 0.5) * 20); const tileY = Math.floor(MAP_HEIGHT_TILES / 2 + (Math.random() - 0.5) * 20); if (!mapGrid[tileY][tileX].solid) { x = tileX * TILE_SIZE - worldBounds.width / 2; y = tileY * TILE_SIZE - worldBounds.height / 2; return { x, y }; } } return { x: 0, y: 0 }; }
+generateMap();
+const startPos = findValidSpawnPoint();
+const player = new Player(startPos.x, startPos.y, TILE_SIZE * 0.7, 'blue');
+
+// =================================================================================
+// --- UI & GAME LOGIC ---
+// =================================================================================
+function toggleCharacterSheet() { isPaused = !isPaused; characterSheetScreen.classList.toggle('hidden'); if (isPaused) { renderCharacterSheet(); } else { animate(); } }
+function calculateStats() {
+    player.attributes = { ...player.baseAttributes };
+    player.derivedStats = { healthRegen: 0, magicFind: 0, lifeLeech: 0 }; // Reset derived stats
+
+    for (const slot in player.equipment) {
+        const item = player.equipment[slot];
+        if (item) {
+            const allStats = { ...itemDB[item.baseId].baseStats, ...item.stats };
+            for (const stat in allStats) {
+                if (['strength', 'dexterity', 'vitality', 'intelligence'].includes(stat)) {
+                    player.attributes[stat] = (player.attributes[stat] || 0) + allStats[stat];
+                } else {
+                    player.derivedStats[stat] = (player.derivedStats[stat] || 0) + allStats[stat];
+                }
+            }
+        }
+    }
+    
+    // Calculate final derived stats from primary attributes
+    player.derivedStats.maxHealth = 100 + (player.attributes.vitality * 5);
+    player.derivedStats.maxSpeed = 4 + (player.attributes.dexterity * 0.05);
+    player.derivedStats.critChance = 5 + (player.attributes.dexterity * 0.2);
+    player.derivedStats.healthRegen += player.attributes.vitality * 0.1;
+
+    playerHealth = Math.min(playerHealth, player.derivedStats.maxHealth);
+    updateHealthDisplay();
+}
+function renderCharacterSheet() {
+    inventoryGrid.innerHTML = '';
+    Object.values(equipmentSlots).forEach(slot => { slot.innerHTML = ''; delete slot.dataset.itemInstance; slot.className = 'inventory-slot'; });
+    for (const slotType in player.equipment) {
+        const item = player.equipment[slotType];
+        if (item) {
+            const slotEl = equipmentSlots[slotType];
+            slotEl.innerHTML = `<img src="${itemDB[item.baseId].sprite}" alt="${itemDB[item.baseId].name}">`;
+            slotEl.dataset.itemInstance = JSON.stringify(item);
+            slotEl.classList.add(item.rarity);
+        }
+    }
+    player.inventory.forEach((item, index) => {
+        const slot = document.createElement('div');
+        slot.className = `inventory-slot ${item.rarity}`;
+        slot.dataset.inventoryIndex = index;
+        slot.dataset.itemInstance = JSON.stringify(item);
+        slot.innerHTML = `<img src="${itemDB[item.baseId].sprite}" alt="${itemDB[item.baseId].name}">`;
+        inventoryGrid.appendChild(slot);
+    });
+
+    // Render stats
+    statsList.innerHTML = `
+        <div><span>Styrka:</span> <span>${player.attributes.strength}</span></div>
+        <div><span>Smidighet:</span> <span>${player.attributes.dexterity}</span></div>
+        <div><span>Vitalitet:</span> <span>${player.attributes.vitality}</span></div>
+        <div><span>Intelligens:</span> <span>${player.attributes.intelligence}</span></div>
+        <hr class="my-2 border-gray-600">
+        <div><span>Max Hälsa:</span> <span>${player.derivedStats.maxHealth.toFixed(0)}</span></div>
+        <div><span>Hälsoregen/s:</span> <span>${player.derivedStats.healthRegen.toFixed(1)}</span></div>
+        <div><span>Kritisk Chans:</span> <span>${player.derivedStats.critChance.toFixed(1)}%</span></div>
+        <div><span>Magisk Fyndchans:</span> <span>+${player.derivedStats.magicFind}%</span></div>
+    `;
+}
+function handleItemClick(e) {
+    const target = e.target.closest('.inventory-slot');
+    if (!target) return;
+    const itemInstanceJSON = target.dataset.itemInstance;
+    if (!itemInstanceJSON) return; // FIX: Check if dataset exists before parsing
+    const itemInstance = JSON.parse(itemInstanceJSON);
+    if (!itemInstance.baseId) return;
+    const inventoryIndex = target.dataset.inventoryIndex;
+    if (inventoryIndex !== undefined) {
+        const itemToEquip = player.inventory[parseInt(inventoryIndex)];
+        const slotToFill = itemDB[itemToEquip.baseId].slot;
+        if (player.equipment[slotToFill]) {
+            const itemToUnequip = player.equipment[slotToFill];
+            player.inventory.push(itemToUnequip);
+        }
+        player.equipment[slotToFill] = itemToEquip;
+        player.inventory.splice(parseInt(inventoryIndex), 1);
+    } else {
+        const slotToEmpty = itemDB[itemInstance.baseId].slot;
+        const itemToUnequip = player.equipment[slotToEmpty];
+        player.inventory.push(itemToUnequip);
+        player.equipment[slotToEmpty] = null;
+    }
+    playSound('equip', 'C5', '16n');
+    calculateStats();
+    renderCharacterSheet();
+}
+function addXP(amount) { playSound('xp', 'A5', '16n'); xp += amount; if (xp >= xpToNextLevel) { level++; xp -= xpToNextLevel; xpToNextLevel = Math.floor(xpToNextLevel * 1.5); levelEl.textContent = level; playSound('levelUp', 'C4', '2n'); showLevelUpScreen(); } updateXpBar(); }
+function updateXpBar() { xpBar.style.width = `${(xp / xpToNextLevel) * 100}%`; }
+function updateHealthDisplay() { healthDisplay.textContent = `${Math.floor(playerHealth)} / ${player.derivedStats.maxHealth.toFixed(0)}`; }
+const upgradePool = [ { id: 'attackSpeed', title: 'Snabbare Attacker', description: 'Ökar attackhastigheten med 15%.', apply: () => { attackCooldown = Math.max(5, attackCooldown * 0.85); } }, { id: 'playerSpeed', title: 'Snabbare Rörelse', description: 'Ökar maxhastigheten.', apply: () => { player.baseAttributes.maxSpeed += 0.5; calculateStats(); } }, { id: 'healthUp', title: 'Reparera Skrov', description: 'Återställer 25 hälsa.', apply: () => { playerHealth = Math.min(player.derivedStats.maxHealth, playerHealth + 25); updateHealthDisplay(); } }, { id: 'magnet', title: 'Större Magnet', description: 'Ökar radien för XP-insamling.', apply: () => { player.magnetRadius += 30; } }, { id: 'critChance', title: 'Vässa Sinnen', description: '+5% Kritisk träffchans.', apply: () => { player.baseAttributes.critChance += 5; calculateStats(); } } ];
+function showLevelUpScreen() {
+    isPaused = true;
+    attributePointsToSpend = 5;
+    tempAttributeAllocation = { strength: 0, dexterity: 0, vitality: 0, intelligence: 0 };
+    levelUpScreen.classList.remove('hidden');
+    
+    renderAttributeAllocator();
+
+    const upgradeCol1 = document.getElementById('upgrade-col-1');
+    const upgradeCol2 = document.getElementById('upgrade-col-2');
+    upgradeCol1.innerHTML = '';
+    upgradeCol2.innerHTML = '';
+
+    const selectedUpgrades = [...upgradePool].sort(() => 0.5 - Math.random()).slice(0, 4); 
+
+    selectedUpgrades.forEach((upgrade, index) => {
+        const card = document.createElement('div');
+        card.className = 'upgrade-card';
+        card.innerHTML = `<h3 class="text-xl font-bold">${upgrade.title}</h3><p class="text-sm text-gray-400">${upgrade.description}</p>`;
+        
+        card.addEventListener('click', () => {
+            document.querySelectorAll('#level-up-screen .upgrade-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            selectedUpgradeToApply = upgrade;
+            confirmLevelUpButton.disabled = false;
+        });
+
+        if (index < 2) {
+            upgradeCol1.appendChild(card);
+        } else {
+            upgradeCol2.appendChild(card);
+        }
+    });
+}
+
+function renderAttributeAllocator() {
+    attributePointsDisplay.textContent = attributePointsToSpend;
+    attributeAllocator.innerHTML = '';
+    ['strength', 'dexterity', 'vitality', 'intelligence'].forEach(attr => {
+        const currentVal = player.baseAttributes[attr] + tempAttributeAllocation[attr];
+        const row = document.createElement('div');
+        row.className = 'attribute-row';
+        row.innerHTML = `<span>${attr.charAt(0).toUpperCase() + attr.slice(1)}: ${currentVal}</span>`;
+        const button = document.createElement('button');
+        button.className = 'attr-button';
+        button.textContent = '+';
+        button.disabled = attributePointsToSpend <= 0;
+        button.onclick = () => {
+            if (attributePointsToSpend > 0) {
+                attributePointsToSpend--;
+                tempAttributeAllocation[attr]++;
+                renderAttributeAllocator();
+            }
+        };
+        row.appendChild(button);
+        attributeAllocator.appendChild(row);
+    });
+}
+
+function confirmLevelUp() {
+    if (selectedUpgradeToApply && typeof selectedUpgradeToApply.apply === 'function') {
+        selectedUpgradeToApply.apply();
+    }
+
+    for (const attr in tempAttributeAllocation) {
+        player.baseAttributes[attr] += tempAttributeAllocation[attr];
+    }
+    levelUpScreen.classList.add('hidden');
+    isPaused = false;
+    calculateStats();
+    animate();
+}
+confirmLevelUpButton.addEventListener('click', confirmLevelUp);
+
+
+function spawnEnemy() {
+    const size = Math.random() * 20 + 15;
+    let x, y, validPosition = false;
+    for (let i = 0; i < 10; i++) {
+        const spawnRadius = (Math.max(canvas.width, canvas.height) / zoomLevel) * 0.6;
+        const angle = Math.random() * Math.PI * 2;
+        x = player.x + Math.cos(angle) * spawnRadius;
+        y = player.y + Math.sin(angle) * spawnRadius;
+        const tileX = Math.floor(x / TILE_SIZE + MAP_WIDTH_TILES / 2);
+        const tileY = Math.floor(y / TILE_SIZE + MAP_HEIGHT_TILES / 2);
+        if (tileX >= 0 && tileX < MAP_WIDTH_TILES && tileY >= 0 && tileY < MAP_HEIGHT_TILES) {
+            if (!mapGrid[tileY][tileX].solid) { validPosition = true; break; }
+        }
+    }
+    if (validPosition) {
+        const rand = Math.random();
+        if (rand < 0.2) { enemies.push(new Enemy(x, y, size * 1.5, 'hsl(0, 50%, 40%)', 0.5, 'B', 5)); } 
+        else if (rand < 0.5) { enemies.push(new Enemy(x, y, size * 0.8, 'hsl(60, 80%, 60%)', 2, 's', 0.5)); } 
+        else { enemies.push(new Enemy(x, y, size, 'hsl(120, 80%, 60%)', 1, 'g', 1)); }
+    }
+}
+function findClosestEnemy() { let closestEnemy = null; let closestDist = Infinity; enemies.forEach(enemy => { const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y); if (dist < closestDist) { closestDist = dist; closestEnemy = enemy; } }); return closestEnemy; }
+function showGameOver() { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = '50px Inter'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '20px Inter'; ctx.fillText(`Din poäng: ${score}`, canvas.width / 2, canvas.height / 2); ctx.restore(); }
+function performAttack() { let angle; if (controlScheme === 'pc' && !pcAutoAttack) { angle = Math.atan2(mousePos.y - player.y, mousePos.x - player.x); } else { const closestEnemy = findClosestEnemy(); if (closestEnemy) { angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x); } else if (joystick.active) { angle = joystick.angle; } else { return; } } const weapon = player.equipment.weapon ? itemDB[player.equipment.weapon.baseId] : null; const attackType = weapon ? weapon.attackType : 'default'; switch(attackType) { case 'melee': playSound('melee'); activeAttacks.push(new MeleeSweep(player.x, player.y, angle)); break; case 'fireball': playSound('fireball', 'C3', '4n'); const fbVelocity = { x: Math.cos(angle) * 6, y: Math.sin(angle) * 6 }; activeAttacks.push(new Projectile(player.x, player.y, 12, '#f97316', fbVelocity, 90)); break; default: playSound('shoot', 'C4', '16n'); const dVelocity = { x: Math.cos(angle) * 8, y: Math.sin(angle) * 8 }; activeAttacks.push(new Projectile(player.x, player.y, 5, '#fef08a', dVelocity)); break; } }
+function handleCollisions() { droppedItems.forEach((item, i) => { if (Math.hypot(player.x - item.x, player.y - item.y) < player.size) { playSound('equip', 'E5', '16n'); player.inventory.push(item.item); droppedItems.splice(i, 1); } }); activeAttacks.forEach(attack => { enemies.forEach((enemy, eIndex) => { let hit = false; if (attack instanceof Projectile) { if (Math.hypot(attack.x - enemy.x, attack.y - enemy.y) < enemy.size / 2 + attack.radius) { hit = true; if (attack.type !== 'fireball') attack.life = attack.duration; } } else if (attack instanceof MeleeSweep) { if (attack.hitEnemies.includes(enemy)) return; const dist = Math.hypot(attack.x - enemy.x, attack.y - enemy.y); if (dist < enemy.size / 2 + attack.radius) { const enemyAngle = Math.atan2(enemy.y - attack.y, enemy.x - attack.x); const angleDiff = Math.abs(attack.angle - enemyAngle); if (angleDiff < Math.PI / 4 || angleDiff > 7 * Math.PI / 4) { hit = true; attack.hitEnemies.push(enemy); } } } if (hit) { playSound('hit', 'C3', '8n'); const isCrit = Math.random() * 100 < player.derivedStats.critChance; const damage = isCrit ? 2 : 1; enemy.health -= damage; damageNumbers.push(new DamageNumber(enemy.x, enemy.y, damage, isCrit)); if (enemy.health <= 0) { playSound('enemyDeath', 'C2', '4n'); for (let i = 0; i < enemy.size / 2; i++) { particles.push(new Particle(enemy.x, enemy.y, Math.random() * 2, enemy.color, { x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 6 })); } xpGems.push(new XPGem(enemy.x, enemy.y, 20)); if (Math.random() < LOOT_CHANCE) { const baseId = lootTable[Math.floor(Math.random() * lootTable.length)]; const newItem = { baseId, rarity: 'normal', stats: {} }; const rand = Math.random(); if (rand < RARE_CHANCE) { newItem.rarity = 'rare'; const p1 = AFFIXES.prefix[Math.floor(Math.random() * AFFIXES.prefix.length)]; const s1 = AFFIXES.suffix[Math.floor(Math.random() * AFFIXES.suffix.length)]; newItem.stats = {...p1.stats, ...s1.stats}; newItem.name = `${p1.name} ${itemDB[baseId].name} ${s1.name}`; } else if (rand < MAGIC_CHANCE) { newItem.rarity = 'magic'; const affix = Math.random() < 0.5 ? AFFIXES.prefix[Math.floor(Math.random() * AFFIXES.prefix.length)] : AFFIXES.suffix[Math.floor(Math.random() * AFFIXES.suffix.length)]; newItem.stats = affix.stats; newItem.name = Math.random() < 0.5 ? `${affix.name} ${itemDB[baseId].name}` : `${itemDB[baseId].name} ${affix.name}`; } droppedItems.push(new DroppedItem(enemy.x, enemy.y, newItem)); } enemies.splice(eIndex, 1); score += 10; } } }); }); enemies.forEach((enemy, eIndex) => { if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < player.size / 2 + enemy.size / 2) { playSound('playerHurt', 'C3', '8n'); playerHealth -= 10; updateHealthDisplay(); if (playerHealth <= 0) isGameOver = true; enemies.splice(eIndex, 1); } }); }
+
+// =================================================================================
+// --- MAIN LOOP ---
+// =================================================================================
+let lastTime = 0;
+function animate(time = 0) {
+    soundTimeOffset = 0;
+    const deltaTime = time - lastTime;
+    lastTime = time;
+
+    if (isGameOver || isPaused) return;
+    requestAnimationFrame(animate);
+    
+    // Health Regen
+    if (player.derivedStats.healthRegen > 0) {
+        playerHealth = Math.min(player.derivedStats.maxHealth, playerHealth + (player.derivedStats.healthRegen * (deltaTime / 1000)));
+        updateHealthDisplay();
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width / 2 - player.x * zoomLevel, canvas.height / 2 - player.y * zoomLevel);
+    ctx.scale(zoomLevel, zoomLevel);
+    drawMap();
+    player.update(); player.draw();
+    droppedItems.forEach(item => item.update());
+    xpGems.forEach((gem, i) => { gem.update(); if (Math.hypot(player.x - gem.x, player.y - gem.y) < player.size / 2) { addXP(gem.value); xpGems.splice(i, 1); } });
+    particles.forEach((p, i) => p.alpha <= 0 ? particles.splice(i, 1) : p.update());
+    activeAttacks.forEach((a, i) => a.life >= a.duration ? activeAttacks.splice(i, 1) : a.update());
+    enemies.forEach(e => e.update());
+    damageNumbers.forEach((dn, i) => dn.life >= dn.duration ? damageNumbers.splice(i, 1) : dn.update());
+    handleCollisions();
+    attackTimer++; if (attackTimer >= attackCooldown) { performAttack(); attackTimer = 0; }
+    enemySpawnTimer++; if (enemySpawnTimer >= enemySpawnCooldown) { spawnEnemy(); enemySpawnTimer = 0; if (enemySpawnCooldown > 20) enemySpawnCooldown *= 0.995; }
+    
+    if (isDebugMode) {
+        if (showCollisions) {
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+            colliders.forEach(c => {
+                ctx.fillRect(c.x, c.y, c.width, c.height);
+            });
+        }
+    }
+
+    ctx.restore();
+
+    if (isPaused && !levelUpScreen.classList.contains('hidden')) {
+        // Don't draw PAUSED text if level up screen is visible
+    } else if (isPaused) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '50px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSAD', canvas.width / 2, canvas.height / 2);
+    }
+    
+    if (isDebugMode) {
+        debugFps.textContent = (1000 / deltaTime).toFixed(0);
+        debugEntities.textContent = `${enemies.length} fiender, ${particles.length} partiklar, ${droppedItems.length} föremål`;
+        debugPlayerX.textContent = player.x.toFixed(2);
+        debugPlayerY.textContent = player.y.toFixed(2);
+    }
+
+    if (isGameOver) showGameOver();
+}
+
+// =================================================================================
+// --- EVENT LISTENERS ---
+// =================================================================================
+function addButtonListener(element, callback) { const action = (e) => { e.preventDefault(); e.stopPropagation(); callback(); }; element.addEventListener('mousedown', action); element.addEventListener('touchend', action); }
+addButtonListener(inventoryButton, toggleCharacterSheet);
+addButtonListener(closeCharacterSheetButton, toggleCharacterSheet);
+addButtonListener(zoomButton, () => {
+    currentZoomIndex = (currentZoomIndex + 1) % zoomLevels.length;
+    zoomLevel = zoomLevels[currentZoomIndex];
+});
+characterSheetScreen.addEventListener('click', (e) => { if(e.target === characterSheetScreen) toggleCharacterSheet(); });
+characterSheetScreen.addEventListener('click', handleItemClick);
+function handleTouchStart(e) {
+    if (isPaused) return;
+    const touch = e.changedTouches[0];
+    // BUGGFIX: Denna check är nu säkrare. Den kollar specifikt om målet är canvas.
+    if (e.target !== canvas) return;
+    joystick.active = true;
+    joystick.touchId = touch.identifier;
+    joystick.baseX = touch.clientX;
+    joystick.baseY = touch.clientY;
+    joystickBase.style.left = `${joystick.baseX}px`;
+    joystickBase.style.top = `${joystick.baseY}px`;
+    joystickBase.style.display = 'block';
+}
+function handleTouchMove(e) { if (!joystick.active) return; let touch; for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === joystick.touchId) { touch = e.changedTouches[i]; break; } } if (!touch) return; const dx = touch.clientX - joystick.baseX; const dy = touch.clientY - joystick.baseY; joystick.angle = Math.atan2(dy, dx); const dist = Math.min(Math.hypot(dx, dy), joystick.maxDist); const handleX = Math.cos(joystick.angle) * dist; const handleY = Math.sin(joystick.angle) * dist; joystickBase.style.transform = `translate(${handleX}px, ${handleY}px)`; }
+function handleTouchEnd(e) { if (!joystick.active) return; let touchEnded = false; for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === joystick.touchId) { touchEnded = true; break; } } if (touchEnded) { joystick.active = false; joystick.touchId = null; joystickBase.style.display = 'none'; } }
+function setupInputListeners() {
+    if (controlScheme === 'pc') {
+        canvas.style.cursor = 'crosshair';
+        joystickBase.style.display = 'none';
+        window.addEventListener('keydown', (e) => { keysPressed[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { delete keysPressed[e.key.toLowerCase()]; });
+        window.addEventListener('mousemove', (e) => {
+            mousePos.x = (e.clientX - canvas.width / 2) / zoomLevel + player.x;
+            mousePos.y = (e.clientY - canvas.height / 2) / zoomLevel + player.y;
+        });
+    } else {
+        canvas.style.cursor = 'default';
+        window.addEventListener('touchstart', handleTouchStart, { passive: false });
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleTouchEnd, { passive: false });
+        window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    }
+}
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+let tooltipTimeout;
+function showTooltip(slot) {
+    if (slot && slot.dataset.itemInstance) {
+        const item = JSON.parse(slot.dataset.itemInstance);
+        const baseItem = itemDB[item.baseId];
+        tooltipName.textContent = item.name || baseItem.name;
+        tooltipName.className = item.rarity ? `${item.rarity}-name` : '';
+        tooltipType.textContent = baseItem.type;
+        tooltipDesc.textContent = baseItem.desc;
+        let statsText = '';
+        const allStats = { ...baseItem.baseStats, ...item.stats };
+        for (const [stat, value] of Object.entries(allStats)) {
+            let statName = '';
+            if (stat === 'strength') statName = 'Styrka';
+            else if (stat === 'dexterity') statName = 'Smidighet';
+            else if (stat === 'vitality') statName = 'Vitalitet';
+            else if (stat === 'intelligence') statName = 'Intelligens';
+            else if (stat === 'healthRegen') statName = 'Hälsoregen/s';
+            else if (stat === 'magicFind') statName = 'Magisk Fyndchans';
+            else if (stat === 'lifeLeech') statName = 'Liv stulet per träff';
+            statsText += `+${value}${stat === 'magicFind' || stat === 'lifeLeech' ? '%' : ''} ${statName}<br>`;
+        }
+        tooltipStats.innerHTML = statsText;
+        const rect = slot.getBoundingClientRect();
+        tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;
+        tooltip.style.top = `${rect.top - tooltip.offsetHeight - 10}px`;
+        tooltip.style.display = 'block';
+    }
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+characterSheetScreen.addEventListener('mouseover', (e) => { showTooltip(e.target.closest('.inventory-slot')); });
+characterSheetScreen.addEventListener('mouseout', hideTooltip);
+characterSheetScreen.addEventListener('touchstart', (e) => { const slot = e.target.closest('.inventory-slot'); if (slot) { tooltipTimeout = setTimeout(() => showTooltip(slot), 500); } });
+characterSheetScreen.addEventListener('touchend', () => { clearTimeout(tooltipTimeout); hideTooltip(); });
+characterSheetScreen.addEventListener('touchmove', () => { clearTimeout(tooltipTimeout); hideTooltip(); });
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'p') {
+        isDebugMode = !isDebugMode;
+        debugPanel.style.display = isDebugMode ? 'block' : 'none';
+    }
+});
+debugCollisionsToggle.addEventListener('change', (e) => {
+    showCollisions = e.target.checked;
+});
+
+// --- START GAME ---
+calculateStats();
+updateXpBar();
+// Don't start animate() here, wait for user to click start.
+
+</script>
+</body>
+</html>
