@@ -1,8 +1,8 @@
-roject Rune-Survive: Detaljerad 5-stegsplan
+Project Rune-Survive: Färdplan v2.0
 Vision: Vampire Survivors möter Diablo 2
-Denna plan är designad för att systematiskt bygga vidare på vår grund, med målet att skapa ett spel med beroendeframkallande action och djupt, meningsfullt karaktärsbygge.
+Denna plan är vår färdplan för att systematiskt bygga ett spel som kombinerar beroendeframkallande action med djupt och meningsfullt karaktärsbygge.
 
-Tier 1: Grundläggande Spelupplevelse (Core Loop) - AVKLARAD
+Fas 1: Grundläggande Spelupplevelse (Core Loop) - AVKLARAD
 [x] Spelare kan röra sig på en slumpmässigt genererad karta.
 
 [x] Fiender spawnar och rör sig mot spelaren.
@@ -25,8 +25,8 @@ Tier 1: Grundläggande Spelupplevelse (Core Loop) - AVKLARAD
 
 [x] Komplett debug-system.
 
-Tier 2: Expandera Kärnan - Mer Val, Fler Fiender
-Mål: Att öka variationen i varje spelrunda genom fler spelstilar och utmaningar.
+Fas 2: Expandera Kärnan - Mer Val, Fler Fiender
+Fokus: Ökad variation och nya utmaningar i varje spelrunda.
 
 [x] Runda 1: Nytt Vapen - Roterande Yxa. Implementera ett nytt vapen som beter sig annorlunda än projektiler (cirkulerar kring spelaren).
 
@@ -38,8 +38,8 @@ Mål: Att öka variationen i varje spelrunda genom fler spelstilar och utmaninga
 
 [ ] Runda 5: Fler Vapen & Förmågor. Lägg till ytterligare 2-3 vapen/förmågor för att öka valmöjligheterna (t.ex. en defensiv sköld, en magisk nova).
 
-Tier 3: Meta-Progression & Permanent Tillväxt
-Mål: Att ge spelaren en anledning att komma tillbaka genom att låsa upp permanenta fördelar.
+Fas 3: Meta-Progression & Permanent Tillväxt
+Fokus: Ge spelaren en anledning att komma tillbaka genom permanenta fördelar.
 
 [ ] Runda 1: Valuta. Fiender har en chans att tappa guld.
 
@@ -51,8 +51,8 @@ Mål: Att ge spelaren en anledning att komma tillbaka genom att låsa upp perman
 
 [ ] Runda 5: Lås upp Nya Föremål. Låt spelaren spendera guld för att lägga till nya vapen och föremål i loot-poolen för framtida rundor.
 
-Tier 4: Världsbygge & Atmosfär
-Mål: Att göra spelvärlden mer levande, varierad och utmanande.
+Fas 4: Världsbygge & Atmosfär
+Fokus: Skapa en mer levande, varierad och utmanande spelvärld.
 
 [ ] Runda 1: Boss-strider. Designa och implementera en unik boss som dyker upp efter en viss tid (t.ex. vid 15-minutersstrecket).
 
@@ -64,10 +64,10 @@ Mål: Att göra spelvärlden mer levande, varierad och utmanande.
 
 [ ] Runda 5: Dag- och Nattcykel. Implementera en visuell cykel som påverkar spelet (t.ex. farligare fiender på natten).
 
-Tier 5: Polering & Långsiktigt Spelande
-Mål: Att finslipa upplevelsen och ge spelarna långsiktiga mål.
+Fas 5: Polering & Långsiktigt Spelande
+Fokus: Finslipa upplevelsen och skapa långsiktiga mål.
 
-[ ] Runda 1: Mer "Juice". Lägg till skärmskakningar, bättre animationer och mer tillfredsställande visuella effekter.
+[ ] Runda 1: Ökad 'Juice' & Feedback. Implementera skärmskakning vid kritiska träffar, partikeleffekter när fiender tar skada och mer dynamiska ljudeffekter.
 
 [ ] Runda 2: Avancerad Ljuddesign. Fler ljudeffekter för föremål, fiender och miljöer. Lägg till fler musikspår.
 
