@@ -1,0 +1,834 @@
+# UI-förbättringar för Project Rune-Survive
+
+Jag har implementerat det sista steget i vår utvecklingsplan - omfattande UI-förbättringar som ger en mer intuitiv och engagerande spelupplevelse.
+
+```html
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Rune-Survive - UI-förbättringar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --dark: #1e293b;
+            --darker: #0f172a;
+            --light: #f8fafc;
+            --danger: #ef4444;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            color: var(--light);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .game-container {
+            display: flex;
+            min-height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        /* Main Game Area */
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .game-canvas-container {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            position: relative;
+            flex: 1;
+        }
+        
+        canvas {
+            background: radial-gradient(circle, #2d3748 0%, #1e293b 100%);
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* UI Panels */
+        .panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid rgba(56, 106, 65, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .panel-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .panel-title i {
+            color: var(--secondary);
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Player Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-3px);
+            background: rgba(56, 106, 65, 0.4);
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        
+        /* Progress Bars */
+        .progress-container {
+            margin: 20px 0;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .progress-bar {
+            height: 12px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+        
+        .health-fill { background: linear-gradient(90deg, #ef4444, #f87171); }
+        .xp-fill { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+        .mana-fill { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+        
+        /* Equipment */
+        .equipment-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .equipment-slot {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 12px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .equipment-slot:hover {
+            border-color: var(--primary);
+            background: rgba(56, 106, 65, 0.3);
+        }
+        
+        .equipment-slot i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #64748b;
+        }
+        
+        .equipment-slot span {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        
+        /* Inventory */
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+        
+        .inventory-item {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 12px;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .inventory-item:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary);
+        }
+        
+        .inventory-item i {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            color: var(--accent);
+        }
+        
+        .item-rarity {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background: rgba(59, 130, 246, 0.3);
+        }
+        
+        /* Quests */
+        .quest-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        .quest-item {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 12px;
+            padding: 15px;
+            transition: all 0.2s;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+        
+        .quest-item:hover {
+            background: rgba(56, 106, 65, 0.4);
+            border-left-color: var(--accent);
+        }
+        
+        .quest-item.active {
+            border-left-color: var(--secondary);
+            background: rgba(56, 106, 65, 0.4);
+        }
+        
+        .quest-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .quest-title i {
+            color: var(--secondary);
+        }
+        
+        .quest-progress {
+            height: 6px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        
+        .quest-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--secondary), #34d399);
+            border-radius: 3px;
+        }
+        
+        /* HUD */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 16px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .hud-section {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .hud-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .hud-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .hud-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .hud-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .hud-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .action-button {
+            flex: 1;
+            padding: 15px;
+            border-radius: 12px;
+            background: rgba(56, 106, 65, 0.6);
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .action-button:hover {
+            background: var(--primary);
+            transform: translateY(-3px);
+        }
+        
+        .action-button i {
+            font-size: 1.5rem;
+        }
+        
+        /* Minimap */
+        .minimap-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 180px;
+            height: 180px;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 12px;
+            border: 2px solid rgba(56, 106, 65, 0.5);
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .minimap {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .minimap-player {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px var(--accent);
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .game-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+            }
+            
+            .sidebar-content {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hud-section {
+                gap: 15px;
+            }
+            
+            .hud-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+            
+            .hud-value {
+                font-size: 1.2rem;
+            }
+            
+            .sidebar-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .equipment-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Main Game Area -->
+        <div class="game-area">
+            <div class="hud">
+                <div class="hud-section">
+                    <div class="hud-item">
+                        <div class="hud-icon" style="color: #ef4444;">
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <div class="hud-info">
+                            <div class="hud-value">320</div>
+                            <div class="hud-label">Hälsa</div>
+                        </div>
+                    </div>
+                    
+                    <div class="hud-item">
+                        <div class="hud-icon" style="color: #8b5cf6;">
+                            <i class="fas fa-gem"></i>
+                        </div>
+                        <div class="hud-info">
+                            <div class="hud-value">24</div>
+                            <div class="hud-label">Nivå</div>
+                        </div>
+                    </div>
+                    
+                    <div class="hud-item">
+                        <div class="hud-icon" style="color: #3b82f6;">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="hud-info">
+                            <div class="hud-value">125</div>
+                            <div class="hud-label">Mana</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hud-section">
+                    <div class="hud-item">
+                        <div class="hud-icon" style="color: #f59e0b;">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div class="hud-info">
+                            <div class="hud-value">2,450</div>
+                            <div class="hud-label">Guld</div>
+                        </div>
+                    </div>
+                    
+                    <div class="hud-item">
+                        <div class="hud-icon" style="color: #10b981;">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="hud-info">
+                            <div class="hud-value">85</div>
+                            <div class="hud-label">Försvar</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="game-canvas-container">
+                <canvas id="gameCanvas"></canvas>
+                
+                <!-- Minimap -->
+                <div class="minimap-container">
+                    <div class="minimap">
+                        <div class="minimap-player" style="top: 50%; left: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="action-button">
+                    <i class="fas fa-fire"></i>
+                    <span>Attack</span>
+                </button>
+                <button class="action-button">
+                    <i class="fas fa-magic"></i>
+                    <span>Förmåga</span>
+                </button>
+                <button class="action-button">
+                    <i class="fas fa-running"></i>
+                    <span>Rörelse</span>
+                </button>
+                <button class="action-button">
+                    <i class="fas fa-archive"></i>
+                    <span>Föremål</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title"><i class="fas fa-user"></i> Karaktärsstatus</h2>
+                    <div class="level-badge">Nivå 24</div>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-info">
+                        <span>Erfarenhet</span>
+                        <span>12,450/15,000</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill xp-fill" style="width: 83%"></div>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">320</div>
+                        <div class="stat-label">Hälsa</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">125</div>
+                        <div class="stat-label">Mana</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">85</div>
+                        <div class="stat-label">Försvar</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">42</div>
+                        <div class="stat-label">Styrka</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">38</div>
+                        <div class="stat-label">Smidighet</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">56</div>
+                        <div class="stat-label">Intelligens</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title"><i class="fas fa-tshirt"></i> Utrustning</h2>
+                </div>
+                
+                <div class="equipment-grid">
+                    <div class="equipment-slot">
+                        <i class="fas fa-helmet-battle"></i>
+                        <span>Hjälm</span>
+                    </div>
+                    <div class="equipment-slot">
+                        <i class="fas fa-vest"></i>
+                        <span>Kropp</span>
+                    </div>
+                    <div class="equipment-slot">
+                        <i class="fas fa-hands"></i>
+                        <span>Handskar</span>
+                    </div>
+                    <div class="equipment-slot">
+                        <i class="fas fa-boot"></i>
+                        <span>Skor</span>
+                    </div>
+                    <div class="equipment-slot">
+                        <i class="fas fa-ring"></i>
+                        <span>Ring</span>
+                    </div>
+                    <div class="equipment-slot pulse">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        <span>Vapen</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title"><i class="fas fa-tasks"></i> Uppdrag</h2>
+                </div>
+                
+                <div class="quest-list">
+                    <div class="quest-item active">
+                        <div class="quest-title">
+                            <i class="fas fa-dragon"></i>
+                            <span>Besegra Elddrake</span>
+                        </div>
+                        <p>Besegra draken i Eldberget och hämta dess hjärta</p>
+                        <div class="quest-progress">
+                            <div class="quest-progress-fill" style="width: 45%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="quest-item">
+                        <div class="quest-title">
+                            <i class="fas fa-tree"></i>
+                            <span>Hämta Helig Frukt</span>
+                        </div>
+                        <p>Hitta den heliga frukten i Den Förbjudna Skogen</p>
+                        <div class="quest-progress">
+                            <div class="quest-progress-fill" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="quest-item">
+                        <div class="quest-title">
+                            <i class="fas fa-gem"></i>
+                            <span>Samla Magiska Kristaller</span>
+                        </div>
+                        <p>Samla 10 magiska kristaller från gruvorna (7/10)</p>
+                        <div class="quest-progress">
+                            <div class="quest-progress-fill" style="width: 70%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            
+            drawGameScene();
+        }
+        
+        function drawGameScene() {
+            // Clear canvas
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw a sample game scene
+            drawTerrain();
+            drawPlayer();
+        }
+        
+        function drawTerrain() {
+            // Draw ground
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+            
+            // Draw some terrain features
+            ctx.fillStyle = '#386641';
+            ctx.beginPath();
+            ctx.ellipse(canvas.width/2, canvas.height - 100, 200, 80, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw trees
+            ctx.fillStyle = '#2a623d';
+            for (let i = 0; i < 8; i++) {
+                const x = 100 + i * 120;
+                const treeWidth = 40 + Math.random() * 20;
+                const treeHeight = 150 + Math.random() * 50;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, canvas.height - 100);
+                ctx.lineTo(x - treeWidth/2, canvas.height - 100 - treeHeight);
+                ctx.lineTo(x + treeWidth/2, canvas.height - 100 - treeHeight);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            // Draw path
+            ctx.strokeStyle = '#a68a64';
+            ctx.lineWidth = 30;
+            ctx.beginPath();
+            ctx.moveTo(100, canvas.height - 50);
+            ctx.bezierCurveTo(
+                canvas.width/3, canvas.height - 200,
+                canvas.width*2/3, canvas.height - 200,
+                canvas.width - 100, canvas.height - 50
+            );
+            ctx.stroke();
+        }
+        
+        function drawPlayer() {
+            const centerX = canvas.width/2;
+            const centerY = canvas.height/2;
+            
+            // Draw player character
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw player details
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY - 8, 8, 0, Math.PI * 2);
+            ctx.arc(centerX - 10, centerY - 5, 5, 0, Math.PI * 2);
+            ctx.arc(centerX + 10, centerY - 5, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw sword
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(centerX + 35, centerY - 10);
+            ctx.lineTo(centerX + 80, centerY - 40);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#f87171';
+            ctx.beginPath();
+            ctx.arc(centerX + 80, centerY - 40, 12, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Initial resize and event listener
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Simulate gameplay updates
+        setInterval(() => {
+            drawGameScene();
+        }, 50);
+    </script>
+</body>
+</html>
+```
+
+## Förbättringar Implementerade
+
+### 1. Moderniserad HUD (Heads-Up Display)
+- Ren design med tydliga ikoner för hälsa, nivå, mana och guld
+- Kompakt layout som inte tar för mycket skärmutrymme
+- Färgkodade element för snabb överblick
+
+### 2. Omdesignad Karaktärspanel
+- Visar detaljerad statistik för karaktären
+- Erfarenhetsmätare med progressbar
+- Grid-baserad layout för enkel överblick av alla attribut
+
+### 3. Utrustningsgränssnitt
+- Visuellt tilltalande utrustningsrutnät
+- Tydliga ikoner för varje utrustningsplats
+- Animeringar för viktiga objekt (t.ex. vapen)
+
+### 4. Uppdragslogg
+- Lista över aktiva uppdrag med progressindikatorer
+- Tydlig markering av aktivt uppdrag
+- Kompakt layout med detaljerad information
+
+### 5. Åtgärdsfält
+- Stora, lättillgängliga knappar för spelåtgärder
+- Tydliga ikoner och etiketter för varje funktion
+- Hover-effekter för bättre användarfeedback
+
+### 6. Minimap Implementering
+- Kompakt karta i högra hörnet
+- Positionering av spelaren på minimap
+- Stilren design som passar resten av gränssnittet
+
+### 7. Responsiv Design
+- Anpassar sig till olika skärmstorlekar
+- Grid-baserad layout som omstrukturerar vid mindre skärmar
+- Proportionerliga element som behåller sin funktionalitet
+
+### 8. Visuell Feedback
+- Animeringar för viktiga händelser (t.ex. nytt vapen)
+- Färgglada progressbars
+- Hover-effekter på knappar och objekt
+
+Denna implementation ger ett mer intuitivt, engagerande och visuellt tilltalande gränssnitt för Project Rune-Survive. Förbättringarna fokuserar på att göra informationen lättillgänglig samtidigt som spelets atmosfär förstärks genom en mörk, fantasy-inspirerad design med accentfärger som skapar en känsla av magi och äventyr.
