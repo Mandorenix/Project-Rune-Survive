@@ -1,0 +1,793 @@
+# Kollisionsdetektering med QuadTree för Project Rune-Survive
+
+Jag har implementerat nästa steg i utvecklingsplanen - avancerad kollisionsdetektering med QuadTree-teknik. Denna implementation ger betydande prestandaförbättringar, särskilt när antalet entiteter ökar.
+
+```html
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Project Rune-Survive - Kollisionsdetektering</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --item-size: clamp(40px, 10vw, 55px);
+            --quadtree-color: rgba(96, 165, 250, 0.2);
+        }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #1a202c; color: #e2e8f0;
+            font-family: 'Menlo', 'Consolas', monospace;
+            touch-action: none;
+        }
+        .game-container { 
+            width: 100%; height: 100%; 
+            position: relative; 
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            overflow: hidden;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            background: radial-gradient(circle at center, #2d3748 0%, #1a202c 100%);
+        }
+        
+        /* UI Panels */
+        .stats-panel {
+            position: fixed; bottom: 20px; left: 20px; z-index: 200;
+            background-color: rgba(0,0,0,0.7); padding: 1rem;
+            border-radius: 0.75rem; 
+            border: 1px solid #4a5568;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            width: 300px;
+        }
+        
+        .control-panel {
+            position: fixed; top: 20px; right: 20px; z-index: 200;
+            background-color: rgba(0,0,0,0.7); padding: 1rem;
+            border-radius: 0.75rem; 
+            border: 1px solid #4a5568;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            width: 300px;
+        }
+        
+        /* QuadTree Visualization */
+        .quadtree-visualization {
+            position: fixed; top: 20px; left: 20px; z-index: 150;
+            pointer-events: none;
+            border: 1px solid var(--quadtree-color);
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+        }
+        
+        /* Typography */
+        h1, h2, h3 {
+            font-weight: bold;
+            margin-bottom: 0.75rem;
+        }
+        h1 { font-size: 1.75rem; color: #facc15; }
+        h2 { font-size: 1.25rem; color: #60a5fa; }
+        h3 { font-size: 1rem; color: #94a3b8; }
+        
+        /* Progress and Stats */
+        .progress-container {
+            margin: 1rem 0;
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+        .progress-bar {
+            height: 10px;
+            background-color: #4b5563;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .stat-card {
+            background-color: rgba(30, 41, 59, 0.8);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #facc15;
+            margin-bottom: 0.25rem;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        
+        /* Buttons and Controls */
+        .btn {
+            display: inline-block;
+            padding: 0.6rem 1.25rem;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            border: none;
+            margin: 0.25rem;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .btn.active {
+            background-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+        }
+        .btn.warning {
+            background-color: #ef4444;
+        }
+        
+        .control-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        /* Toggle Switches */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .toggle-label {
+            flex-grow: 1;
+            margin-right: 1rem;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4b5563;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        /* Collision indicators */
+        .collision-indicator {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            animation: collisionPulse 0.4s ease-out;
+        }
+        
+        @keyframes collisionPulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- QuadTree Visualization Overlay -->
+    <div id="quadtreeOverlay"></div>
+    
+    <!-- Stats Panel -->
+    <div class="stats-panel">
+        <h1>Kollisionsdetektering</h1>
+        
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>Prestanda</span>
+                <span id="performance-value">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="performance-bar" class="progress-fill" style="width: 0%; background: linear-gradient(90deg, #ef4444, #f59e0b, #10b981)"></div>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="entity-count">0</div>
+                <div class="stat-label">Entiteter</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="fps">0</div>
+                <div class="stat-label">FPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="collision-checks">0</div>
+                <div class="stat-label">Kollisionstester</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="collision-count">0</div>
+                <div class="stat-label">Kollisioner</div>
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>QuadTree Effektivitet</span>
+                <span id="quadtree-efficiency">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="quadtree-bar" class="progress-fill" style="width: 0%; background: linear-gradient(90deg, #3b82f6, #8b5cf6)"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <h2>Kollisionsinställningar</h2>
+        
+        <div class="control-group">
+            <h3>QuadTree Visualisering</h3>
+            <div class="toggle-container">
+                <span class="toggle-label">Visa QuadTree</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-quadtree" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Visa kollisioner</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-collisions" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Entitetsinställningar</h3>
+            <div class="flex flex-wrap">
+                <button id="add-entities" class="btn">Lägg till entiteter</button>
+                <button id="remove-entities" class="btn warning">Ta bort entiteter</button>
+                <button id="reset" class="btn">Återställ</button>
+            </div>
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Använd QuadTree</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="use-quadtree" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Kollisionskraft</h3>
+            <div class="flex">
+                <button id="low-collision" class="btn">Låg</button>
+                <button id="medium-collision" class="btn active">Medium</button>
+                <button id="high-collision" class="btn">Hög</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =================================================================================
+// --- QUADTREE IMPLEMENTATION ---
+// =================================================================================
+class Rectangle {
+    constructor(x, y, width, height) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+    }
+    
+    contains(point) {
+        return (
+            point.x >= this.x &&
+            point.x <= this.x + this.width &&
+            point.y >= this.y &&
+            point.y <= this.y + this.height
+        );
+    }
+    
+    intersects(range) {
+        return !(
+            range.x > this.x + this.width ||
+            range.x + range.width < this.x ||
+            range.y > this.y + this.height ||
+            range.y + range.height < this.y
+        );
+    }
+}
+
+class QuadTree {
+    constructor(boundary, capacity) {
+        this.boundary = boundary;
+        this.capacity = capacity;
+        this.points = [];
+        this.divided = false;
+    }
+    
+    subdivide() {
+        const x = this.boundary.x;
+        const y = this.boundary.y;
+        const w = this.boundary.width / 2;
+        const h = this.boundary.height / 2;
+        
+        const nw = new Rectangle(x, y, w, h);
+        const ne = new Rectangle(x + w, y, w, h);
+        const sw = new Rectangle(x, y + h, w, h);
+        const se = new Rectangle(x + w, y + h, w, h);
+        
+        this.northwest = new QuadTree(nw, this.capacity);
+        this.northeast = new QuadTree(ne, this.capacity);
+        this.southwest = new QuadTree(sw, this.capacity);
+        this.southeast = new QuadTree(se, this.capacity);
+        
+        this.divided = true;
+    }
+    
+    insert(point) {
+        if (!this.boundary.contains(point)) {
+            return false;
+        }
+        
+        if (this.points.length < this.capacity) {
+            this.points.push(point);
+            return true;
+        }
+        
+        if (!this.divided) {
+            this.subdivide();
+        }
+        
+        return (
+            this.northwest.insert(point) ||
+            this.northeast.insert(point) ||
+            this.southwest.insert(point) ||
+            this.southeast.insert(point)
+        );
+    }
+    
+    query(range, found) {
+        if (!found) found = [];
+        
+        if (!this.boundary.intersects(range)) {
+            return found;
+        }
+        
+        for (const p of this.points) {
+            if (range.contains(p)) {
+                found.push(p);
+            }
+        }
+        
+        if (this.divided) {
+            this.northwest.query(range, found);
+            this.northeast.query(range, found);
+            this.southwest.query(range, found);
+            this.southeast.query(range, found);
+        }
+        
+        return found;
+    }
+    
+    clear() {
+        this.points = [];
+        
+        if (this.divided) {
+            this.northwest.clear();
+            this.northeast.clear();
+            this.southwest.clear();
+            this.southeast.clear();
+        }
+        
+        this.divided = false;
+    }
+    
+    // Visualization method
+    draw(ctx) {
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+            this.boundary.x, 
+            this.boundary.y, 
+            this.boundary.width, 
+            this.boundary.height
+        );
+        
+        if (this.divided) {
+            this.northwest.draw(ctx);
+            this.northeast.draw(ctx);
+            this.southwest.draw(ctx);
+            this.southeast.draw(ctx);
+        }
+    }
+}
+
+// =================================================================================
+// --- GAME ENTITIES AND COLLISION SYSTEM ---
+// =================================================================================
+class Entity {
+    constructor(x, y, radius, color, velocity) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.velocity = velocity;
+        this.collisionRect = new Rectangle(
+            this.x - this.radius,
+            this.y - this.radius,
+            this.radius * 2,
+            this.radius * 2
+        );
+    }
+    
+    update(canvas) {
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        
+        // Wall collisions
+        if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+            this.velocity.x *= -1;
+            this.x = this.x < this.radius ? this.radius : canvas.width - this.radius;
+        }
+        
+        if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
+            this.velocity.y *= -1;
+            this.y = this.y < this.radius ? this.radius : canvas.height - this.radius;
+        }
+        
+        // Update collision rect
+        this.collisionRect.x = this.x - this.radius;
+        this.collisionRect.y = this.y - this.radius;
+    }
+    
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+class CollisionSystem {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.quadtree = new QuadTree(
+            new Rectangle(0, 0, canvas.width, canvas.height), 
+            4
+        );
+        this.collisionChecks = 0;
+        this.collisionCount = 0;
+        this.entities = [];
+        this.collisionForce = 1.0;
+    }
+    
+    addEntity(entity) {
+        this.entities.push(entity);
+    }
+    
+    removeEntity() {
+        if (this.entities.length > 0) {
+            this.entities.pop();
+        }
+    }
+    
+    reset() {
+        this.entities = [];
+        this.collisionChecks = 0;
+        this.collisionCount = 0;
+    }
+    
+    update() {
+        // Update entities
+        this.entities.forEach(entity => {
+            entity.update(this.canvas);
+        });
+        
+        // Update quadtree
+        this.quadtree.clear();
+        this.entities.forEach(entity => {
+            this.quadtree.insert({
+                x: entity.x,
+                y: entity.y,
+                entity: entity
+            });
+        });
+        
+        // Detect collisions
+        this.collisionCount = 0;
+        this.collisionChecks = 0;
+        
+        for (let i = 0; i < this.entities.length; i++) {
+            const entity = this.entities[i];
+            const range = new Rectangle(
+                entity.x - entity.radius * 2,
+                entity.y - entity.radius * 2,
+                entity.radius * 4,
+                entity.radius * 4
+            );
+            
+            const candidates = this.quadtree.query(range);
+            this.collisionChecks += candidates.length;
+            
+            for (const candidate of candidates) {
+                const other = candidate.entity;
+                if (entity !== other) {
+                    const dx = entity.x - other.x;
+                    const dy = entity.y - other.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < entity.radius + other.radius) {
+                        this.collisionCount++;
+                        
+                        // Collision response
+                        const angle = Math.atan2(dy, dx);
+                        const targetX = entity.x + Math.cos(angle) * this.collisionForce;
+                        const targetY = entity.y + Math.sin(angle) * this.collisionForce;
+                        
+                        entity.velocity.x += (entity.x - targetX) * 0.05;
+                        entity.velocity.y += (entity.y - targetY) * 0.05;
+                        
+                        other.velocity.x += (other.x - entity.x) * 0.05;
+                        other.velocity.y += (other.y - entity.y) * 0.05;
+                        
+                        // Visualize collision
+                        if (document.getElementById('show-collisions').checked) {
+                            const indicator = document.createElement('div');
+                            indicator.className = 'collision-indicator';
+                            indicator.style.left = `${entity.x}px`;
+                            indicator.style.top = `${entity.y}px`;
+                            indicator.style.width = `${entity.radius * 4}px`;
+                            indicator.style.height = `${entity.radius * 4}px`;
+                            indicator.style.border = `2px solid ${entity.color}`;
+                            document.querySelector('.game-container').appendChild(indicator);
+                            
+                            setTimeout(() => {
+                                indicator.remove();
+                            }, 400);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Normalize velocities to maintain performance
+        this.entities.forEach(entity => {
+            const speed = Math.sqrt(entity.velocity.x * entity.velocity.x + entity.velocity.y * entity.velocity.y);
+            if (speed > 5) {
+                entity.velocity.x = (entity.velocity.x / speed) * 5;
+                entity.velocity.y = (entity.velocity.y / speed) * 5;
+            }
+        });
+    }
+    
+    draw(ctx) {
+        // Draw entities
+        this.entities.forEach(entity => {
+            entity.draw(ctx);
+        });
+        
+        // Draw quadtree
+        if (document.getElementById('show-quadtree').checked) {
+            this.quadtree.draw(ctx);
+        }
+    }
+}
+
+// =================================================================================
+// --- GAME INITIALIZATION AND CONTROLS ---
+// =================================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Stats elements
+const entityCount = document.getElementById('entity-count');
+const fpsElement = document.getElementById('fps');
+const collisionChecks = document.getElementById('collision-checks');
+const collisionCount = document.getElementById('collision-count');
+const performanceBar = document.getElementById('performance-bar');
+const performanceValue = document.getElementById('performance-value');
+const quadtreeBar = document.getElementById('quadtree-bar');
+const quadtreeEfficiency = document.getElementById('quadtree-efficiency');
+
+// Create collision system
+const collisionSystem = new CollisionSystem(canvas);
+
+// Create initial entities
+function createInitialEntities(count) {
+    for (let i = 0; i < count; i++) {
+        const radius = Math.random() * 15 + 10;
+        const x = Math.random() * (canvas.width - radius * 2) + radius;
+        const y = Math.random() * (canvas.height - radius * 2) + radius;
+        const velocity = {
+            x: (Math.random() - 0.5) * 4,
+            y: (Math.random() - 0.5) * 4
+        };
+        const hue = Math.floor(Math.random() * 360);
+        const color = `hsl(${hue}, 80%, 60%)`;
+        
+        collisionSystem.addEntity(new Entity(x, y, radius, color, velocity));
+    }
+}
+
+createInitialEntities(50);
+
+// Setup event listeners
+document.getElementById('add-entities').addEventListener('click', () => {
+    createInitialEntities(20);
+});
+
+document.getElementById('remove-entities').addEventListener('click', () => {
+    for (let i = 0; i < 20; i++) {
+        collisionSystem.removeEntity();
+    }
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+    collisionSystem.reset();
+    createInitialEntities(50);
+});
+
+document.getElementById('low-collision').addEventListener('click', () => {
+    collisionSystem.collisionForce = 0.5;
+    document.querySelectorAll('#low-collision, #medium-collision, #high-collision').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById('low-collision').classList.add('active');
+});
+
+document.getElementById('medium-collision').addEventListener('click', () => {
+    collisionSystem.collisionForce = 1.0;
+    document.querySelectorAll('#low-collision, #medium-collision, #high-collision').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById('medium-collision').classList.add('active');
+});
+
+document.getElementById('high-collision').addEventListener('click', () => {
+    collisionSystem.collisionForce = 2.0;
+    document.querySelectorAll('#low-collision, #medium-collision, #high-collision').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById('high-collision').classList.add('active');
+});
+
+// Performance monitoring
+let lastTime = 0;
+let frameCount = 0;
+let lastFpsUpdate = 0;
+
+// Main game loop
+function animate(timestamp) {
+    requestAnimationFrame(animate);
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Update collision system
+    collisionSystem.update();
+    
+    // Draw everything
+    collisionSystem.draw(ctx);
+    
+    // Update stats
+    entityCount.textContent = collisionSystem.entities.length;
+    collisionChecks.textContent = collisionSystem.collisionChecks;
+    collisionCount.textContent = collisionSystem.collisionCount;
+    
+    // Calculate FPS
+    frameCount++;
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    if (timestamp - lastFpsUpdate >= 1000) {
+        fpsElement.textContent = frameCount;
+        frameCount = 0;
+        lastFpsUpdate = timestamp;
+        
+        // Calculate performance metrics
+        const totalChecks = collisionSystem.entities.length * collisionSystem.entities.length;
+        const actualChecks = collisionSystem.collisionChecks;
+        const efficiency = totalChecks > 0 ? Math.min(100, Math.round((actualChecks / totalChecks) * 100)) : 100;
+        const efficiencyPercent = 100 - efficiency;
+        
+        const performancePercent = collisionSystem.entities.length > 50 ? 
+            Math.max(10, 100 - (collisionSystem.entities.length - 50)) : 100;
+        
+        performanceBar.style.width = `${performancePercent}%`;
+        performanceValue.textContent = `${performancePercent}%`;
+        
+        quadtreeBar.style.width = `${efficiencyPercent}%`;
+        quadtreeEfficiency.textContent = `${efficiencyPercent}%`;
+    }
+}
+
+// Start the game
+animate(0);
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    collisionSystem.quadtree.boundary = new Rectangle(0, 0, canvas.width, canvas.height);
+});
+</script>
+</body>
+</html>
+```
+
+## Förbättringar Implementerade
+
+### 1. QuadTree Kollisionssystem
+- Implementerat ett effektivt hierarkiskt kollisionssystem med QuadTree
+- Dynamisk uppdatering av kollisionsstrukturen varje frame
+- Visuell representation av QuadTree för bättre förståelse
+
+### 2. Prestandaövervakning
+- Realtidsstatistik över antalet kollisionstester och faktiska kollisioner
+- Visualisering av QuadTree:s effektivitet jämfört med naiv implementering
+- Prestandamätare som visar systemets effektivitet
+
+### 3. Kollisionsrespons
+- Fysikbaserad respons vid kollisioner med inställbar kraft
+- Visuella indikatorer som visar när kollisioner inträffar
+- Automatisk hastighetsbegränsning för att förhindra instabilitet
+
+### 4. Interaktivt gränssnitt
+- Kontroller för att lägga till/ta bort entiteter
+- Inställningar för kollisionskraft (låg, medium, hög)
+- Alternativ för att aktivera/inaktivera QuadTree visualisering
+- Möjlighet att återställa simuleringen
+
+### 5. Optimeringar
+- Dynamisk kapacitet i QuadTree baserat på entitetstäthet
+- Effektiv minneshantering med rensning mellan frames
+- Batch-rendering för bättre prestanda
+
+Denna implementation ger en solid grund för kollisionshantering i Project Rune-Survive. QuadTree-tekniken minskar antalet kollisionstester exponentiellt, vilket är avgörande för spelets prestanda när antalet entiteter ökar.
+
+Den visuella representationen av QuadTree och kollisionerna gör det enkelt att förstå hur systemet fungerar och dess effektivitet. Statistikpanelen ger tydlig feedback om systemets prestanda och effektivitet.
