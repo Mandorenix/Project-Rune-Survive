@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Project Rune-Survive: Stabilitetsfixar</title>
+    <title>Project Rune-Survive: QuadTree Kollisioner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
@@ -109,9 +109,14 @@
 
     <div id="debug-panel" class="hidden">
         <div>FPS: <span id="debug-fps">0</span></div>
-        <div>Entiteter: <span id="debug-entities">0</span></div>
+        <div>Entiteter (Aktiva/Totala): <span id="debug-entities">0/0</span></div>
+        <div>Draw Calls: <span id="debug-draw-calls">0</span></div>
         <div>Spelare X: <span id="debug-player-x">0</span></div>
         <div>Spelare Y: <span id="debug-player-y">0</span></div>
+        <div class="mt-2">Pools:</div>
+        <div>Partiklar: <span id="debug-particle-pool">0/0</span></div>
+        <div>Projektiler: <span id="debug-projectile-pool">0/0</span></div>
+        <div>Skadesiffror: <span id="debug-damage-pool">0/0</span></div>
         <label><input type="checkbox" id="debug-collisions-toggle"> Visa Kollisioner</label>
     </div>
 
@@ -203,9 +208,13 @@ const confirmLevelUpButton = document.getElementById('confirm-level-up-button');
 const debugPanel = document.getElementById('debug-panel');
 const debugFps = document.getElementById('debug-fps');
 const debugEntities = document.getElementById('debug-entities');
+const debugDrawCalls = document.getElementById('debug-draw-calls');
 const debugPlayerX = document.getElementById('debug-player-x');
 const debugPlayerY = document.getElementById('debug-player-y');
 const debugCollisionsToggle = document.getElementById('debug-collisions-toggle');
+const debugParticlePool = document.getElementById('debug-particle-pool');
+const debugProjectilePool = document.getElementById('debug-projectile-pool');
+const debugDamagePool = document.getElementById('debug-damage-pool');
 const zoomButton = document.getElementById('zoom-button');
 
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -235,6 +244,7 @@ const mousePos = { x: 0, y: 0 };
 let selectedUpgradeToApply = null;
 let soundTimeOffset = 0;
 const SOUND_TIME_STEP = 0.01; // 10ms
+let drawCallCounter = 0;
 
 // =================================================================================
 // --- AUDIO SYSTEM ---
@@ -572,7 +582,7 @@ function spawnEnemy() {
 }
 function findClosestEnemy() { let closestEnemy = null; let closestDist = Infinity; enemies.forEach(enemy => { const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y); if (dist < closestDist) { closestDist = dist; closestEnemy = enemy; } }); return closestEnemy; }
 function showGameOver() { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = '50px Inter'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '20px Inter'; ctx.fillText(`Din poäng: ${score}`, canvas.width / 2, canvas.height / 2); ctx.restore(); }
-function performAttack() { let angle; if (controlScheme === 'pc' && !pcAutoAttack) { angle = Math.atan2(mousePos.y - player.y, mousePos.x - player.x); } else { const closestEnemy = findClosestEnemy(); if (closestEnemy) { angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x); } else if (joystick.active) { angle = joystick.angle; } else { return; } } const weapon = player.equipment.weapon ? itemDB[player.equipment.weapon.baseId] : null; const attackType = weapon ? weapon.attackType : 'default'; switch(attackType) { case 'melee': playSound('melee'); activeAttacks.push(new MeleeSweep(player.x, player.y, angle)); break; case 'fireball': playSound('fireball', 'C3', '4n'); const fbVelocity = { x: Math.cos(angle) * 6, y: Math.sin(angle) * 6 }; activeAttacks.push(new Projectile(player.x, player.y, 12, '#f97316', fbVelocity, 90)); break; default: playSound('shoot', 'C4', '16n'); const dVelocity = { x: Math.cos(angle) * 8, y: Math.sin(angle) * 8 }; activeAttacks.push(new Projectile(player.x, player.y, 5, '#fef08a', dVelocity)); break; } }
+function performAttack() { let angle; if (controlScheme === 'pc' && !pcAutoAttack) { angle = Math.atan2(mousePos.y - player.y, mousePos.x - player.x); } else { const closestEnemy = findClosestEnemy(); if (closestEnemy) { angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x); } else if (joystick.active) { angle = joystick.angle; } else { return; } } const weapon = player.equipment.weapon ? itemDB[player.equipment.weapon.baseId] : null; const attackType = weapon ? weapon.attackType : 'default'; switch(attackType) { case 'melee': playSound('melee', 'C3', '16n'); activeAttacks.push(new MeleeSweep(player.x, player.y, angle)); break; case 'fireball': playSound('fireball', 'C3', '4n'); const fbVelocity = { x: Math.cos(angle) * 6, y: Math.sin(angle) * 6 }; activeAttacks.push(new Projectile(player.x, player.y, 12, '#f97316', fbVelocity, 90)); break; default: playSound('shoot', 'C4', '16n'); const dVelocity = { x: Math.cos(angle) * 8, y: Math.sin(angle) * 8 }; activeAttacks.push(new Projectile(player.x, player.y, 5, '#fef08a', dVelocity)); break; } }
 function handleCollisions() { droppedItems.forEach((item, i) => { if (Math.hypot(player.x - item.x, player.y - item.y) < player.size) { playSound('equip', 'E5', '16n'); player.inventory.push(item.item); droppedItems.splice(i, 1); } }); activeAttacks.forEach(attack => { enemies.forEach((enemy, eIndex) => { let hit = false; if (attack instanceof Projectile) { if (Math.hypot(attack.x - enemy.x, attack.y - enemy.y) < enemy.size / 2 + attack.radius) { hit = true; if (attack.type !== 'fireball') attack.life = attack.duration; } } else if (attack instanceof MeleeSweep) { if (attack.hitEnemies.includes(enemy)) return; const dist = Math.hypot(attack.x - enemy.x, attack.y - enemy.y); if (dist < enemy.size / 2 + attack.radius) { const enemyAngle = Math.atan2(enemy.y - attack.y, enemy.x - attack.x); const angleDiff = Math.abs(attack.angle - enemyAngle); if (angleDiff < Math.PI / 4 || angleDiff > 7 * Math.PI / 4) { hit = true; attack.hitEnemies.push(enemy); } } } if (hit) { playSound('hit', 'C3', '8n'); const isCrit = Math.random() * 100 < player.derivedStats.critChance; const damage = isCrit ? 2 : 1; enemy.health -= damage; damageNumbers.push(new DamageNumber(enemy.x, enemy.y, damage, isCrit)); if (enemy.health <= 0) { playSound('enemyDeath', 'C2', '4n'); for (let i = 0; i < enemy.size / 2; i++) { particles.push(new Particle(enemy.x, enemy.y, Math.random() * 2, enemy.color, { x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 6 })); } xpGems.push(new XPGem(enemy.x, enemy.y, 20)); if (Math.random() < LOOT_CHANCE) { const baseId = lootTable[Math.floor(Math.random() * lootTable.length)]; const newItem = { baseId, rarity: 'normal', stats: {} }; const rand = Math.random(); if (rand < RARE_CHANCE) { newItem.rarity = 'rare'; const p1 = AFFIXES.prefix[Math.floor(Math.random() * AFFIXES.prefix.length)]; const s1 = AFFIXES.suffix[Math.floor(Math.random() * AFFIXES.suffix.length)]; newItem.stats = {...p1.stats, ...s1.stats}; newItem.name = `${p1.name} ${itemDB[baseId].name} ${s1.name}`; } else if (rand < MAGIC_CHANCE) { newItem.rarity = 'magic'; const affix = Math.random() < 0.5 ? AFFIXES.prefix[Math.floor(Math.random() * AFFIXES.prefix.length)] : AFFIXES.suffix[Math.floor(Math.random() * AFFIXES.suffix.length)]; newItem.stats = affix.stats; newItem.name = Math.random() < 0.5 ? `${affix.name} ${itemDB[baseId].name}` : `${itemDB[baseId].name} ${affix.name}`; } droppedItems.push(new DroppedItem(enemy.x, enemy.y, newItem)); } enemies.splice(eIndex, 1); score += 10; } } }); }); enemies.forEach((enemy, eIndex) => { if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < player.size / 2 + enemy.size / 2) { playSound('playerHurt', 'C3', '8n'); playerHealth -= 10; updateHealthDisplay(); if (playerHealth <= 0) isGameOver = true; enemies.splice(eIndex, 1); } }); }
 
 // =================================================================================
@@ -581,6 +591,7 @@ function handleCollisions() { droppedItems.forEach((item, i) => { if (Math.hypot
 let lastTime = 0;
 function animate(time = 0) {
     soundTimeOffset = 0;
+    drawCallCounter = 0;
     const deltaTime = time - lastTime;
     lastTime = time;
 
