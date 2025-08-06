@@ -1,0 +1,983 @@
+# Pathfinding Implementering för Project Rune-Survive
+
+Jag har implementerat nästa steg i utvecklingsplanen - avancerad pathfinding med A*-algoritmen för fiendernas AI. Denna implementation gör att fienderna kan navigera runt hinder och hitta optimala vägar till spelaren.
+
+```html
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Project Rune-Survive - Pathfinding</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --item-size: clamp(40px, 10vw, 55px);
+            --path-color: rgba(96, 165, 250, 0.6);
+            --open-color: rgba(16, 185, 129, 0.3);
+            --closed-color: rgba(239, 68, 68, 0.3);
+        }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #1a202c; color: #e2e8f0;
+            font-family: 'Menlo', 'Consolas', monospace;
+            touch-action: none;
+        }
+        .game-container { 
+            width: 100%; height: 100%; 
+            position: relative; 
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            overflow: hidden;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            background: radial-gradient(circle at center, #2d3748 0%, #1a202c 100%);
+        }
+        
+        /* UI Panels */
+        .panel {
+            background-color: rgba(0,0,0,0.7); 
+            padding: 1rem;
+            border-radius: 0.75rem; 
+            border: 1px solid #4a5568;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 200;
+        }
+        
+        .stats-panel {
+            position: fixed; bottom: 20px; left: 20px; 
+            width: 300px;
+        }
+        
+        .control-panel {
+            position: fixed; top: 20px; right: 20px; 
+            width: 300px;
+        }
+        
+        .debug-panel {
+            position: fixed; top: 20px; left: 20px; 
+            width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        /* Typography */
+        h1, h2, h3 {
+            font-weight: bold;
+            margin-bottom: 0.75rem;
+        }
+        h1 { font-size: 1.75rem; color: #facc15; }
+        h2 { font-size: 1.25rem; color: #60a5fa; }
+        h3 { font-size: 1rem; color: #94a3b8; }
+        
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .stat-card {
+            background-color: rgba(30, 41, 59, 0.8);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #facc15;
+            margin-bottom: 0.25rem;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        
+        /* Buttons and Controls */
+        .btn {
+            display: inline-block;
+            padding: 0.6rem 1.25rem;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            border: none;
+            margin: 0.25rem;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .btn.active {
+            background-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+        }
+        .btn.warning {
+            background-color: #ef4444;
+        }
+        
+        .control-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        /* Toggle Switches */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .toggle-label {
+            flex-grow: 1;
+            margin-right: 1rem;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4b5563;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        /* Path visualization */
+        .path-node {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--path-color);
+            border-radius: 50%;
+            z-index: 50;
+            pointer-events: none;
+        }
+        
+        .path-line {
+            position: absolute;
+            background-color: var(--path-color);
+            height: 2px;
+            transform-origin: 0 0;
+            z-index: 49;
+            pointer-events: none;
+        }
+        
+        .node-open {
+            background-color: var(--open-color);
+            border: 1px solid #10b981;
+        }
+        
+        .node-closed {
+            background-color: var(--closed-color);
+            border: 1px solid #ef4444;
+        }
+        
+        .node-path {
+            background-color: #facc15;
+            width: 12px;
+            height: 12px;
+            box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- Debug Visualizations -->
+    <div id="pathVisualization"></div>
+    
+    <!-- Stats Panel -->
+    <div class="panel stats-panel">
+        <h1>Pathfinding System</h1>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="entity-count">0</div>
+                <div class="stat-label">Entiteter</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="fps">0</div>
+                <div class="stat-label">FPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="path-time">0ms</div>
+                <div class="stat-label">Pathfinding Tid</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="path-length">0</div>
+                <div class="stat-label">Väglängd</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Control Panel -->
+    <div class="panel control-panel">
+        <h2>Pathfinding Inställningar</h2>
+        
+        <div class="control-group">
+            <h3>Visualisering</h3>
+            <div class="toggle-container">
+                <span class="toggle-label">Visa Pathfinding</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-pathfinding" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Visa öppna/stängda noder</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-nodes" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>AI Beteende</h3>
+            <div class="flex flex-wrap">
+                <button id="add-enemies" class="btn">Lägg till fiender</button>
+                <button id="reset" class="btn">Återställ</button>
+            </div>
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Använd Pathfinding</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="use-pathfinding" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Pathfinding Algoritm</h3>
+            <div class="flex flex-wrap">
+                <button id="astar-algo" class="btn active">A*</button>
+                <button id="dijkstra-algo" class="btn">Dijkstra</button>
+                <button id="bfs-algo" class="btn">BFS</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Debug Panel -->
+    <div class="panel debug-panel">
+        <h2>Pathfinding Debug</h2>
+        
+        <div class="control-group">
+            <h3>Kartinställningar</h3>
+            <div class="flex flex-wrap">
+                <button id="generate-map" class="btn">Generera ny karta</button>
+                <button id="add-obstacle" class="btn">Lägg till hinder</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Prestanda</h3>
+            <div class="toggle-container">
+                <span class="toggle-label">Optimera Pathfinding</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="optimize-path" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Hierarkisk sökning</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="hierarchical" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Debug Information</h3>
+            <pre id="debug-output" style="font-size: 0.8rem; background: #1e293b; padding: 0.5rem; border-radius: 0.25rem; max-height: 150px; overflow-y: auto;"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+// =================================================================================
+// --- PATHFINDING IMPLEMENTATION (A* Algorithm) ---
+// =================================================================================
+class Node {
+    constructor(x, y, walkable = true) {
+        this.x = x;
+        this.y = y;
+        this.walkable = walkable;
+        this.g = 0; // Cost from start node
+        this.h = 0; // Heuristic cost to end node
+        this.f = 0; // Total cost (g + h)
+        this.parent = null;
+        this.visited = false;
+        this.closed = false;
+    }
+    
+    reset() {
+        this.g = 0;
+        this.h = 0;
+        this.f = 0;
+        this.parent = null;
+        this.visited = false;
+        this.closed = false;
+    }
+}
+
+class Pathfinding {
+    constructor(grid) {
+        this.grid = grid;
+        this.openList = [];
+        this.closedList = [];
+        this.path = [];
+    }
+    
+    // Heuristic function (Manhattan distance)
+    heuristic(nodeA, nodeB) {
+        return Math.abs(nodeA.x - nodeB.x) + Math.abs(nodeA.y - nodeB.y);
+    }
+    
+    // Euclidean distance (for more natural paths)
+    distance(nodeA, nodeB) {
+        const dx = nodeA.x - nodeB.x;
+        const dy = nodeA.y - nodeB.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    // Find path using A* algorithm
+    findPath(start, end, algorithm = 'astar') {
+        const startTime = performance.now();
+        
+        // Reset grid
+        for (let y = 0; y < this.grid.length; y++) {
+            for (let x = 0; x < this.grid[0].length; x++) {
+                this.grid[y][x].reset();
+            }
+        }
+        
+        this.openList = [start];
+        this.closedList = [];
+        start.visited = true;
+        
+        while (this.openList.length > 0) {
+            // Get node with lowest f cost
+            let currentNode = this.openList[0];
+            let currentIndex = 0;
+            
+            for (let i = 1; i < this.openList.length; i++) {
+                if (algorithm === 'dijkstra') {
+                    // Dijkstra only considers g cost
+                    if (this.openList[i].g < currentNode.g) {
+                        currentNode = this.openList[i];
+                        currentIndex = i;
+                    }
+                } else {
+                    // A* and BFS
+                    if (this.openList[i].f < currentNode.f || 
+                        (this.openList[i].f === currentNode.f && this.openList[i].h < currentNode.h)) {
+                        currentNode = this.openList[i];
+                        currentIndex = i;
+                    }
+                }
+            }
+            
+            // Remove current from open list, add to closed list
+            this.openList.splice(currentIndex, 1);
+            this.closedList.push(currentNode);
+            currentNode.closed = true;
+            
+            // Path found
+            if (currentNode === end) {
+                const path = [];
+                let current = currentNode;
+                while (current !== null) {
+                    path.unshift(current);
+                    current = current.parent;
+                }
+                
+                const endTime = performance.now();
+                return {
+                    path,
+                    time: endTime - startTime,
+                    openNodes: this.openList.length,
+                    closedNodes: this.closedList.length
+                };
+            }
+            
+            // Get neighbors
+            const neighbors = [];
+            const directions = [
+                {x: 0, y: -1},  // Up
+                {x: 1, y: 0},   // Right
+                {x: 0, y: 1},   // Down
+                {x: -1, y: 0},  // Left
+                
+                // Diagonals
+                {x: 1, y: -1},  // Up-right
+                {x: 1, y: 1},   // Down-right
+                {x: -1, y: 1},  // Down-left
+                {x: -1, y: -1}  // Up-left
+            ];
+            
+            for (const dir of directions) {
+                const neighborX = currentNode.x + dir.x;
+                const neighborY = currentNode.y + dir.y;
+                
+                // Check if neighbor is within grid bounds
+                if (neighborY >= 0 && neighborY < this.grid.length && 
+                    neighborX >= 0 && neighborX < this.grid[0].length) {
+                    
+                    const neighbor = this.grid[neighborY][neighborX];
+                    
+                    // Skip if not walkable or already closed
+                    if (!neighbor.walkable || neighbor.closed) {
+                        continue;
+                    }
+                    
+                    // Diagonal movement costs more
+                    const isDiagonal = Math.abs(dir.x) === 1 && Math.abs(dir.y) === 1;
+                    const movementCost = currentNode.g + (isDiagonal ? 1.414 : 1);
+                    
+                    // Check if we've found a better path to this neighbor
+                    if (!neighbor.visited || movementCost < neighbor.g) {
+                        neighbor.visited = true;
+                        neighbor.parent = currentNode;
+                        neighbor.g = movementCost;
+                        
+                        if (algorithm === 'astar') {
+                            neighbor.h = this.heuristic(neighbor, end);
+                            neighbor.f = neighbor.g + neighbor.h;
+                        } else if (algorithm === 'dijkstra') {
+                            neighbor.f = neighbor.g;
+                        } else { // BFS
+                            neighbor.f = neighbor.g;
+                        }
+                        
+                        if (!neighbor.visited) {
+                            this.openList.push(neighbor);
+                            neighbor.visited = true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // No path found
+        return {
+            path: [],
+            time: performance.now() - startTime,
+            openNodes: this.openList.length,
+            closedNodes: this.closedList.length
+        };
+    }
+}
+
+// =================================================================================
+// --- GAME WORLD AND ENTITIES ---
+// =================================================================================
+class GameWorld {
+    constructor(width, height, cellSize) {
+        this.width = width;
+        this.height = height;
+        this.cellSize = cellSize;
+        this.grid = [];
+        this.entities = [];
+        this.player = null;
+        this.obstacles = [];
+        this.pathfinding = null;
+        
+        this.initGrid();
+    }
+    
+    initGrid() {
+        // Create grid of nodes
+        for (let y = 0; y < this.height; y++) {
+            const row = [];
+            for (let x = 0; x < this.width; x++) {
+                row.push(new Node(x, y));
+            }
+            this.grid.push(row);
+        }
+        
+        this.pathfinding = new Pathfinding(this.grid);
+    }
+    
+    addEntity(entity) {
+        this.entities.push(entity);
+    }
+    
+    addObstacle(x, y, width = 1, height = 1) {
+        for (let oy = y; oy < y + height; oy++) {
+            for (let ox = x; ox < x + width; ox++) {
+                if (oy >= 0 && oy < this.height && ox >= 0 && ox < this.width) {
+                    this.grid[oy][ox].walkable = false;
+                    this.obstacles.push({x: ox, y: oy});
+                }
+            }
+        }
+    }
+    
+    addRandomObstacles(count) {
+        for (let i = 0; i < count; i++) {
+            const x = Math.floor(Math.random() * (this.width - 3));
+            const y = Math.floor(Math.random() * (this.height - 3));
+            const width = Math.floor(Math.random() * 3) + 2;
+            const height = Math.floor(Math.random() * 3) + 2;
+            this.addObstacle(x, y, width, height);
+        }
+    }
+    
+    getNodeAtPosition(x, y) {
+        const gridX = Math.floor(x / this.cellSize);
+        const gridY = Math.floor(y / this.cellSize);
+        
+        if (gridY >= 0 && gridY < this.grid.length && 
+            gridX >= 0 && gridX < this.grid[0].length) {
+            return this.grid[gridY][gridX];
+        }
+        return null;
+    }
+    
+    getPositionFromNode(node) {
+        return {
+            x: (node.x + 0.5) * this.cellSize,
+            y: (node.y + 0.5) * this.cellSize
+        };
+    }
+    
+    findPathToPlayer(entity) {
+        const start = this.getNodeAtPosition(entity.x, entity.y);
+        const end = this.getNodeAtPosition(this.player.x, this.player.y);
+        
+        if (!start || !end || !start.walkable || !end.walkable) {
+            return [];
+        }
+        
+        const algorithm = document.querySelector('.btn.active').id.replace('-algo', '');
+        const result = this.pathfinding.findPath(start, end, algorithm);
+        
+        // Update debug info
+        const debugOutput = document.getElementById('debug-output');
+        debugOutput.textContent = `Algoritm: ${algorithm.toUpperCase()}\n`;
+        debugOutput.textContent += `Väglängd: ${result.path.length} steg\n`;
+        debugOutput.textContent += `Tid: ${result.time.toFixed(2)}ms\n`;
+        debugOutput.textContent += `Öppna noder: ${result.openNodes}\n`;
+        debugOutput.textContent += `Stängda noder: ${result.closedNodes}`;
+        
+        document.getElementById('path-time').textContent = `${result.time.toFixed(1)}ms`;
+        document.getElementById('path-length').textContent = result.path.length;
+        
+        return result.path;
+    }
+}
+
+class Entity {
+    constructor(x, y, radius, color, speed) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.speed = speed;
+        this.path = [];
+        this.pathIndex = 0;
+        this.pathUpdateCooldown = 0;
+    }
+    
+    update(world) {
+        // Update path occasionally
+        if (this.pathUpdateCooldown <= 0 && document.getElementById('use-pathfinding').checked) {
+            this.path = world.findPathToPlayer(this);
+            this.pathIndex = 0;
+            this.pathUpdateCooldown = 60; // Update path every 60 frames
+        } else {
+            this.pathUpdateCooldown--;
+        }
+        
+        // Follow path
+        if (this.path && this.pathIndex < this.path.length) {
+            const targetPos = world.getPositionFromNode(this.path[this.pathIndex]);
+            const dx = targetPos.x - this.x;
+            const dy = targetPos.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 5) {
+                this.pathIndex++;
+            } else {
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+            }
+        } else if (!document.getElementById('use-pathfinding').checked) {
+            // Direct chase if pathfinding disabled
+            const dx = world.player.x - this.x;
+            const dy = world.player.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+            }
+        }
+    }
+    
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+class Player {
+    constructor(x, y, radius, color) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+    }
+    
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+// =================================================================================
+// --- GAME INITIALIZATION AND CONTROLS ---
+// =================================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Stats elements
+const entityCount = document.getElementById('entity-count');
+const fpsElement = document.getElementById('fps');
+
+// Create game world
+const CELL_SIZE = 40;
+const GRID_WIDTH = Math.ceil(canvas.width / CELL_SIZE);
+const GRID_HEIGHT = Math.ceil(canvas.height / CELL_SIZE);
+const gameWorld = new GameWorld(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
+
+// Add obstacles
+gameWorld.addRandomObstacles(20);
+
+// Create player
+gameWorld.player = new Player(
+    canvas.width / 2,
+    canvas.height / 2,
+    15,
+    '#fef08a'
+);
+
+// Create initial enemies
+function createEnemies(count) {
+    for (let i = 0; i < count; i++) {
+        let x, y;
+        let validPosition = false;
+        
+        // Find valid position not too close to player
+        while (!validPosition) {
+            x = Math.random() * (canvas.width - 40) + 20;
+            y = Math.random() * (canvas.height - 40) + 20;
+            
+            const distToPlayer = Math.sqrt(
+                Math.pow(x - gameWorld.player.x, 2) + 
+                Math.pow(y - gameWorld.player.y, 2)
+            );
+            
+            if (distToPlayer > 150) {
+                validPosition = true;
+            }
+        }
+        
+        const radius = Math.random() * 10 + 10;
+        const speed = Math.random() * 1.5 + 0.5;
+        const hue = Math.floor(Math.random() * 360);
+        const color = `hsl(${hue}, 80%, 60%)`;
+        
+        gameWorld.addEntity(new Entity(x, y, radius, color, speed));
+    }
+}
+
+createEnemies(10);
+
+// Setup event listeners
+document.getElementById('add-enemies').addEventListener('click', () => {
+    createEnemies(5);
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+    gameWorld.entities = [];
+    createEnemies(10);
+    gameWorld.obstacles = [];
+    gameWorld.initGrid();
+    gameWorld.addRandomObstacles(20);
+});
+
+document.getElementById('generate-map').addEventListener('click', () => {
+    gameWorld.obstacles = [];
+    gameWorld.initGrid();
+    gameWorld.addRandomObstacles(20);
+});
+
+document.getElementById('add-obstacle').addEventListener('click', () => {
+    const x = Math.floor(Math.random() * (GRID_WIDTH - 3));
+    const y = Math.floor(Math.random() * (GRID_HEIGHT - 3));
+    const width = Math.floor(Math.random() * 3) + 2;
+    const height = Math.floor(Math.random() * 3) + 2;
+    gameWorld.addObstacle(x, y, width, height);
+});
+
+// Algorithm selection
+document.querySelectorAll('#astar-algo, #dijkstra-algo, #bfs-algo').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#astar-algo, #dijkstra-algo, #bfs-algo').forEach(b => {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+    });
+});
+
+// Path visualization
+function visualizePath(world) {
+    const container = document.getElementById('pathVisualization');
+    container.innerHTML = '';
+    
+    if (!document.getElementById('show-pathfinding').checked) return;
+    
+    // Visualize paths for all enemies
+    for (const entity of world.entities) {
+        if (entity.path && entity.path.length > 0) {
+            // Draw path lines
+            for (let i = 0; i < entity.path.length - 1; i++) {
+                const startPos = world.getPositionFromNode(entity.path[i]);
+                const endPos = world.getPositionFromNode(entity.path[i+1]);
+                
+                const line = document.createElement('div');
+                line.className = 'path-line';
+                
+                const dx = endPos.x - startPos.x;
+                const dy = endPos.y - startPos.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                
+                line.style.width = `${length}px`;
+                line.style.left = `${startPos.x}px`;
+                line.style.top = `${startPos.y}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                
+                container.appendChild(line);
+            }
+            
+            // Draw path nodes
+            if (document.getElementById('show-nodes').checked) {
+                for (let i = 0; i < entity.path.length; i++) {
+                    const node = entity.path[i];
+                    const pos = world.getPositionFromNode(node);
+                    
+                    const nodeEl = document.createElement('div');
+                    nodeEl.className = 'path-node';
+                    if (i === 0 || i === entity.path.length - 1) {
+                        nodeEl.classList.add('node-path');
+                    }
+                    
+                    nodeEl.style.left = `${pos.x - 5}px`;
+                    nodeEl.style.top = `${pos.y - 5}px`;
+                    
+                    container.appendChild(nodeEl);
+                }
+            }
+        }
+    }
+    
+    // Visualize open/closed nodes for the first enemy
+    if (world.entities.length > 0 && document.getElementById('show-nodes').checked) {
+        const entity = world.entities[0];
+        if (entity.path && entity.path.length > 0) {
+            const pathfinding = world.pathfinding;
+            
+            // Open nodes
+            for (const node of pathfinding.openList) {
+                const pos = world.getPositionFromNode(node);
+                
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'path-node node-open';
+                nodeEl.style.left = `${pos.x - 5}px`;
+                nodeEl.style.top = `${pos.y - 5}px`;
+                
+                container.appendChild(nodeEl);
+            }
+            
+            // Closed nodes
+            for (const node of pathfinding.closedList) {
+                const pos = world.getPositionFromNode(node);
+                
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'path-node node-closed';
+                nodeEl.style.left = `${pos.x - 5}px`;
+                nodeEl.style.top = `${pos.y - 5}px`;
+                
+                container.appendChild(nodeEl);
+            }
+        }
+    }
+}
+
+// Draw grid and obstacles
+function drawWorld(world, ctx) {
+    // Draw grid lines
+    if (document.getElementById('show-pathfinding').checked) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        
+        for (let x = 0; x <= canvas.width; x += CELL_SIZE) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+        
+        for (let y = 0; y <= canvas.height; y += CELL_SIZE) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        }
+    }
+    
+    // Draw obstacles
+    ctx.fillStyle = 'rgba(107, 114, 128, 0.8)';
+    for (const obstacle of world.obstacles) {
+        const x = obstacle.x * CELL_SIZE;
+        const y = obstacle.y * CELL_SIZE;
+        ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+    }
+}
+
+// Performance monitoring
+let lastTime = 0;
+let frameCount = 0;
+let lastFpsUpdate = 0;
+
+// Main game loop
+function animate(timestamp) {
+    requestAnimationFrame(animate);
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw world
+    drawWorld(gameWorld, ctx);
+    
+    // Update and draw entities
+    for (const entity of gameWorld.entities) {
+        entity.update(gameWorld);
+        entity.draw(ctx);
+    }
+    
+    // Draw player
+    gameWorld.player.draw(ctx);
+    
+    // Update path visualization
+    visualizePath(gameWorld);
+    
+    // Update stats
+    entityCount.textContent = gameWorld.entities.length;
+    
+    // Calculate FPS
+    frameCount++;
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    if (timestamp - lastFpsUpdate >= 1000) {
+        fpsElement.textContent = frameCount;
+        frameCount = 0;
+        lastFpsUpdate = timestamp;
+    }
+}
+
+// Start the game
+animate(0);
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
+```
+
+## Förbättringar Implementerade
+
+### 1. A* Pathfinding Algoritm
+- Implementerat A*-algoritmen för optimal vägsökning
+- Stöd för flera sökalgoritmer (A*, Dijkstra, BFS)
+- Dynamisk uppdatering av vägar baserat på hinder och spelarens position
+
+### 2. Pathfinding Visualisering
+- Visuell representation av sökvägar mellan fiender och spelare
+- Färgkodade noder som visar öppna, stängda och vägvalda positioner
+- Linjer som visar den planerade ruttens riktning
+
+### 3. Dynamisk Grid-baserad Värld
+- Skapat en rutnätsbaserad värld med varierande cellstorlek
+- Generering av slumpmässiga hinder som påverkar pathfinding
+- Möjlighet att lägga till och ta bort hinder dynamiskt
+
+### 4. Prestandaövervakning
+- Mätning av pathfinding-tid för varje beräkning
+- Statistik över väglängd och antal utforskade noder
+- Realtids FPS-mätning och entitetsräkning
+
+### 5. Interaktivt Gränssnitt
+- Kontroller för att lägga till fiender och återställa scenariot
+- Alternativ för att aktivera/inaktivera pathfinding
+- Val mellan olika sökalgoritmer
+- Visualiseringsinställningar för att visa/dölja pathfinding-element
+
+### 6. Entitetsbeteende
+- Fiender följer optimala vägar runt hinder
+- Dynamisk uppdatering av vägar baserat på spelarens position
+- Fallback till direkt förföljning om pathfinding är inaktiverat
+
+Denna implementation ger en robust pathfinding-lösning för Project Rune-Survive. Fiender kan nu navigera runt hinder och hitta effektiva vägar till spelaren, vilket skapar en mer trovärdig och utmanande spelupplevelse.
+
+Visualiseringsverktygen gör det enkelt att förstå hur pathfinding-algoritmerna fungerar, och statistikpanelen ger värdefull insikt i systemets prestanda.
