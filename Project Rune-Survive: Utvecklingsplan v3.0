@@ -1,51 +1,78 @@
-Project Rune-Survive: Utvecklingsplan v3.0
-Vision & Ledande Principer
-Vårt mål är att kombinera den beroendeframkallande actionen från Vampire Survivors med det djupa föremålssystemet från Diablo 2. Varje ny funktion ska fokusera på spelglädje, meningsfulla val och vara enkel att bygga vidare på.
+Project Rune-Survive: Färdplan v2.0
+Vision: Vampire Survivors möter Diablo 2
+Denna plan är vår färdplan för att systematiskt bygga ett spel som kombinerar beroendeframkallande action med djupt och meningsfullt karaktärsbygge.
 
-Prioriterad Utvecklingsordning
-1. Prestandaoptimering (Högsta prioritet) - AVKLARAD
-Mål: Säkerställa en stabil och flytande spelupplevelse (60 FPS) på alla enheter genom att optimera minnesanvändning och renderingsprocessen.
+Fas 1: Grundläggande Spelupplevelse (Core Loop) - AVKLARAD
+[x] Spelare kan röra sig på en slumpmässigt genererad karta.
 
-[x] Steg 1: Object Pooling: Skapa återanvändningsbara "pooler" för fiender, projektiler och partiklar för att drastiskt minska "skräp" i minnet.
+[x] Fiender spawnar och rör sig mot spelaren.
 
-[x] Steg 2: Batch Rendering: Gruppera rit-anrop till grafikkortet för att effektivisera hur spelet ritas upp på skärmen.
+[x] Grundläggande stridssystem (auto-attack).
 
-[x] Steg 3: Minneshantering: Identifiera och eliminera onödiga objekt-skapelser i huvudloopen för att förhindra att spelet saktar ner över tid.
+[x] XP-system och level ups.
 
-[x] Steg 4: Dynamisk Entity Management: Införa ett "sömnläge" för fiender och objekt som är långt utanför skärmen så att de inte använder onödig processorkraft.
+[x] Grundläggande föremål och inventarium.
 
-2. Kollisionsdetektering (Hög prioritet)
-Mål: Implementera ett snabbt och exakt system för att hantera kollisioner mellan hundratals objekt.
+[x] Valbara kontroller (Mobil/PC).
 
-[x] Steg 1: QuadTree Implementering: Bygga en datastruktur (QuadTree) som delar upp spelvärlden i mindre zoner för att snabbt kunna hitta närliggande objekt.
+[x] Prestandaoptimering (Entity Culling).
 
-[ ] Steg 2: Hierarkisk Kollisionsdetektering: Använda QuadTree för en snabb grovsortering och endast utföra exakta kollisionsberäkningar på de objekt som faktiskt riskerar att krocka.
+[x] Zoom-funktion.
 
-[ ] Steg 3: Optimera Kollisionsgeometri: Byta ut fyrkantiga "hitboxes" mot mer effektiva cirkulära för bättre prestanda och mer träffsäker känsla.
+[x] Fler och valbara uppgraderingar vid level up.
 
-3. Pathfinding (Medel prioritet)
-Mål: Ge fiender en mer intelligent och utmanande AI som kan navigera runt hinder.
+[x] Stabil ljudhantering.
 
-[ ] Steg 1: A Pathfinding Implementering:* Införa A*-algoritmen som låter fiender hitta den smartaste och kortaste vägen till spelaren.
+[x] Komplett debug-system.
 
-[ ] Steg 2: Waypoint-baserad rörelse: Få fiender att röra sig mjukt och naturligt längs den uträknade vägen.
+Fas 2: Expandera Kärnan - Mer Val, Fler Fiender
+Fokus: Ökad variation och nya utmaningar i varje spelrunda.
 
-[ ] Steg 3: Fallback-mekanism: Se till att fiender fortfarande jagar spelaren även om pathfinding av någon anledning skulle misslyckas.
+[x] Runda 1: Nytt Vapen - Roterande Yxa. Implementera ett nytt vapen som beter sig annorlunda än projektiler (cirkulerar kring spelaren).
 
-4. UI-förbättringar (Medel prioritet)
-Mål: Skapa ett modernt, snyggt och intuitivt användargränssnitt.
+[x] Runda 2: Uppgraderingsevolution. Skapa ett system där vapen kan "utvecklas" till en kraftfullare version om man har rätt kombination av uppgraderingar.
 
-[ ] Steg 1: Drag & Drop Inventory: Implementera ett smidigt inventarium där spelaren kan dra och släppa föremål.
+[ ] Runda 3: Ny Fiendetyp - Skytt. Introducera en fiende som attackerar på avstånd för att tvinga fram nya rörelsemönster.
 
-[ ] Steg 2: Minimap Implementering: Skapa en minimikarta som visar spelarens och fiendernas positioner.
+[ ] Runda 4: Elitfiender. Skapa starkare "champion"-versioner av vanliga fiender som är större, tåligare och ger bättre belöningar.
 
-[ ] Steg 3: Animerade UI-element: Lägga till animationer och effekter för att göra gränssnittet mer levande och tillfredsställande.
+[ ] Runda 5: Fler Vapen & Förmågor. Lägg till ytterligare 2-3 vapen/förmågor för att öka valmöjligheterna (t.ex. en defensiv sköld, en magisk nova).
 
-[ ] Steg 4: Responsiv Design: Säkerställa att gränssnittet ser bra ut och är lätt att använda på både stora och små skärmar.
+Fas 3: Meta-Progression & Permanent Tillväxt
+Fokus: Ge spelaren en anledning att komma tillbaka genom permanenta fördelar.
 
-Mätvärden för Framgång
-Prestanda: Stabil 60 FPS, minnesanvändning under 100MB.
+[ ] Runda 1: Valuta. Fiender har en chans att tappa guld.
 
-Spelbarhet: Fiender fastnar inte, kollisioner känns rättvisa.
+[ ] Runda 2: Butik Mellan Rundor. Skapa en meny där spelaren kan spendera guld på permanenta uppgraderingar.
 
-Användarupplevelse: Gränssnittet känns intuitivt och modernt.
+[ ] Runda 3: Grundläggande Meta-uppgraderingar. Implementera köpbara bonusar som "+10% Guld", "+5% XP", "+1 Armor".
+
+[ ] Runda 4: Lås upp Nya Karaktärer. Lägg till möjligheten att låsa upp nya spelbara karaktärer med unika startvapen och stats.
+
+[ ] Runda 5: Lås upp Nya Föremål. Låt spelaren spendera guld för att lägga till nya vapen och föremål i loot-poolen för framtida rundor.
+
+Fas 4: Världsbygge & Atmosfär
+Fokus: Skapa en mer levande, varierad och utmanande spelvärld.
+
+[ ] Runda 1: Boss-strider. Designa och implementera en unik boss som dyker upp efter en viss tid (t.ex. vid 15-minutersstrecket).
+
+[ ] Runda 2: Fler Helgedomar (Shrines). Lägg till fler typer av helgedomar med unika effekter (t.ex. "Girighet" som ökar guld-drop, "Förbannelse" som ökar fiender men ger mer XP).
+
+[ ] Runda 3: Miljöfaror. Introducera fällor eller farliga ytor på kartan som skadar både spelare och fiender.
+
+[ ] Runda 4: Nya Biomer. Skapa ett system för olika zoner på kartan (t.ex. en kyrkogård, en bränd skog) med unika fiender och utseenden.
+
+[ ] Runda 5: Dag- och Nattcykel. Implementera en visuell cykel som påverkar spelet (t.ex. farligare fiender på natten).
+
+Fas 5: Polering & Långsiktigt Spelande
+Fokus: Finslipa upplevelsen och skapa långsiktiga mål.
+
+[ ] Runda 1: Ökad 'Juice' & Feedback. Implementera skärmskakning vid kritiska träffar, partikeleffekter när fiender tar skada och mer dynamiska ljudeffekter.
+
+[ ] Runda 2: Avancerad Ljuddesign. Fler ljudeffekter för föremål, fiender och miljöer. Lägg till fler musikspår.
+
+[ ] Runda 3: Prestationer (Achievements). Skapa ett system för att låsa upp prestationer för specifika utmaningar.
+
+[ ] Runda 4: Hemligheter. Göm hemliga karaktärer, föremål eller områden som spelaren kan upptäcka.
+
+[ ] Runda 5: Balansering & Slutgiltig Testning. En genomgående balansering av alla vapen, fiender och uppgraderingar.
