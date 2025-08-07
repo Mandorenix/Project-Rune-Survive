@@ -1,0 +1,225 @@
+## Grundlig Kodanalys & Förbättringsplan
+
+Efter att ha gått igenom din kod i detalj har jag identifierat flera kritiska områden. Här är en fullständig plan med prioriterade åtgärder:
+
+### 🚨 Kritisk Åtgärd (Omedelbar implementation)
+1. **Ljudsystemets trådhantering**
+   - Problem: Blockering i huvudloopen när ljudkrock inträffar
+   - Lösning: Implementera ljudkö med dedikerad tråd
+   - Fil: `src/Audio/SoundManager.cpp`
+
+```cpp
+// Uppdaterad SoundManager
+void SoundManager::init() {
+    // Allokera fler ljudkanaler
+    Mix_AllocateChannels(32);
+    
+    // Starta ljudtråd
+    soundThread = SDL_CreateThread(soundThreadFunction, "SoundThread", nullptr);
+}
+
+int SoundManager::soundThreadFunction(void* data) {
+    while (true) {
+        std::string nextSound = "";
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            if (!soundQueue.empty()) {
+                nextSound = soundQueue.front();
+                soundQueue.pop();
+            }
+        }
+        
+        if (!nextSound.empty()) {
+            Mix_Chunk* sound = ResourceManager::getSound(nextSound);
+            if (sound) {
+                int channel = Mix_PlayChannel(-1, sound, 0);
+                if (channel == -1) {
+                    SDL_Log("Ljudspelning misslyckades: %s", Mix_GetError());
+                }
+            }
+        }
+        SDL_Delay(5); // Minska CPU-belastning
+    }
+    return 0;
+}
+```
+
+### ⚡ Prestandaoptimeringar
+2. **Rendering Optimering**
+   - Problem: Texturer hämtas varje frame
+   - Lösning: Cacha textur-referenser
+   - Fil: `src/Game.cpp`
+
+```cpp
+void Game::render() {
+    // Förbered texturer EN gång
+    static SDL_Texture* playerTex = ResourceManager::getTexture("player");
+    static SDL_Texture* enemyTex = ResourceManager::getTexture("enemy");
+    
+    for (auto& entity : entities) {
+        SDL_Texture* tex = nullptr;
+        switch(entity.getType()) {
+            case EntityType::PLAYER: tex = playerTex; break;
+            case EntityType::ENEMY: tex = enemyTex; break;
+            // ... andra entitetstyper
+        }
+        SDL_RenderCopy(renderer, tex, nullptr, &entity.getRect());
+    }
+}
+```
+
+3. **Kollisionsoptimering**
+   - Problem: O(n²) komplexitet
+   - Lösning: Spatial grid-system
+   - Fil: `src/Physics/Physics.cpp`
+
+```cpp
+void Physics::update(std::vector<Entity>& entities) {
+    // Skapa spatial grid
+    std::unordered_map<std::pair<int, int>, std::vector<Entity*>> grid;
+    const int GRID_SIZE = 100; // Justera baserat på spelfönsterstorlek
+
+    // Fyll griden
+    for (auto& entity : entities) {
+        int gridX = static_cast<int>(entity.x) / GRID_SIZE;
+        int gridY = static_cast<int>(entity.y) / GRID_SIZE;
+        grid[{gridX, gridY}].push_back(&entity);
+    }
+
+    // Kolla kollisioner per grid-cell
+    for (auto& cell : grid) {
+        auto& entitiesInCell = cell.second;
+        for (size_t i = 0; i < entitiesInCell.size(); ++i) {
+            for (size_t j = i + 1; j < entitiesInCell.size(); ++j) {
+                if (checkCollision(*entitiesInCell[i], *entitiesInCell[j])) {
+                    // Hantera kollision
+                }
+            }
+        }
+    }
+}
+```
+
+### 🐞 Buggfixar
+4. **Minnesläckor**
+   - Problem: Resurser frigörs inte
+   - Fil: `src/Core/ResourceManager.cpp`
+
+```cpp
+void ResourceManager::cleanup() {
+    // Texturer
+    for (auto& tex : textures) {
+        SDL_DestroyTexture(tex.second);
+    }
+    textures.clear();
+
+    // Ljud
+    for (auto& sound : sounds) {
+        Mix_FreeChunk(sound.second);
+    }
+    sounds.clear();
+
+    // Fonts
+    for (auto& font : fonts) {
+        TTF_CloseFont(font.second);
+    }
+    fonts.clear();
+}
+```
+
+5. **Entitetshantering**
+   - Problem: Döda entiteter tas inte bort
+   - Fil: `src/Game.cpp`
+
+```cpp
+void Game::update() {
+    // Ta bort döda entiteter
+    entities.erase(std::remove_if(entities.begin(), entities.end(),
+        [](const Entity& e) { return e.isDead(); }),
+        entities.end());
+}
+```
+
+6. **FPS-reglering**
+   - Problem: Ingen FPS-begränsning
+   - Fil: `src/main.cpp`
+
+```cpp
+const int TARGET_FPS = 60;
+const int FRAME_DELAY = 1000 / TARGET_FPS;
+
+Uint32 frameStart;
+int frameTime;
+
+while (running) {
+    frameStart = SDL_GetTicks();
+    
+    // Huvudloop-logik
+    
+    frameTime = SDL_GetTicks() - frameStart;
+    if (FRAME_DELAY > frameTime) {
+        SDL_Delay(FRAME_DELAY - frameTime);
+    }
+}
+```
+
+### 🛠️ Refaktorering & Strukturförbättringar
+7. **Inputhantering**
+   - Problem: Musinput hanteras inkonsekvent
+   - Lösning: Centraliserad inputhanterare
+   - Fil: `src/Input/InputHandler.cpp`
+
+```cpp
+void InputHandler::update() {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+            case SDL_MOUSEBUTTONDOWN:
+                mouseDown = true;
+                SDL_GetMouseState(&mouseX, &mouseY);
+                break;
+            case SDL_MOUSEBUTTONUP:
+                mouseDown = false;
+                break;
+            // Hantera andra händelser
+        }
+    }
+}
+```
+
+8. **Resursladdning**
+   - Problem: Ljud laddas när de spelas
+   - Lösning: Förladdning vid start
+   - Fil: `src/main.cpp`
+
+```cpp
+// Innan huvudloopen
+ResourceManager::loadSound("shoot", "assets/sounds/shoot.wav");
+ResourceManager::loadSound("explosion", "assets/sounds/explosion.wav");
+// ... andra ljud
+```
+
+### 📋 Implementeringsplan (Prioriterad ordning)
+
+| Prioritet | Område             | Åtgärd                             | Tidsuppskattning |
+|-----------|--------------------|-----------------------------------|------------------|
+| KRITISKT  | Ljudsystem         | Implementera trådad ljudkö         | 2 timmar         |
+| HÖG       | Prestanda          | Inför spatial grid för kollisioner | 3 timmar         |
+| HÖG       | Minne              | Fixa minnesläckor                  | 1 timmar         |
+| MEDIUM    | Rendering          | Cacha textur-referenser            | 1 timmar         |
+| MEDIUM    | Spelmotor          | Implementera FPS-reglering         | 30 minuter       |
+| LÅG       | Refaktorering      | Inputhanterare                     | 2 timmar         |
+
+### 💡 Ytterligare Förbättringar
+- **Profilering**: Använd `SDL_GetPerformanceCounter()` för att identifiera flaskhalsar
+- **Resursmonitor**: Implementera debug-visning för antal entiteter/ljud
+- **Ljudprioritering**: Lägg till system för att avbryta mindre viktiga ljud
+- **Effektiv sökning**: Implementera spatial hash-map för snabbare kollisioner
+
+### ✅ Testplan
+1. **Ljudtest**: Spela upp 20+ ljud samtidigt
+2. **Prestandatest**: Skapa 1000+ entiteter och mäta FPS
+3. **Minnestest**: Köra spelet längre tid och kontrollera minnesanvändning
+4. **Kollisionstest**: Testa med många objekt i samma område
+
+Genom att implementera dessa åtgärder kommer spelet att bli betydligt mer stabilt och prestandamässigt effektivt. Börja med de kritiska ljud- och minnesfixarna, sedan prestandaoptimeringarna.
