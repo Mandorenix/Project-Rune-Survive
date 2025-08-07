@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Project Rune-Survive: Prestandaoptimeringar</title>
+    <title>Project Rune-Survive: Stabil Spelmotor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
@@ -166,6 +166,7 @@
 
     <div id="debug-panel" class="hidden">
         <div>FPS: <span id="debug-fps">0</span></div>
+        <div>Uppdateringar/ram: <span id="debug-updates">0</span></div>
         <div>Entiteter (Aktiva/Totala): <span id="debug-entities">0/0</span></div>
         <div>Draw Calls: <span id="debug-draw-calls">0</span></div>
         <div>Kollisionskontroller: <span id="debug-collision-checks">0</span></div>
@@ -271,6 +272,7 @@ const attributeAllocator = document.getElementById('attribute-allocator');
 const confirmLevelUpButton = document.getElementById('confirm-level-up-button');
 const debugPanel = document.getElementById('debug-panel');
 const debugFps = document.getElementById('debug-fps');
+const debugUpdates = document.getElementById('debug-updates');
 const debugEntities = document.getElementById('debug-entities');
 const debugDrawCalls = document.getElementById('debug-draw-calls');
 const debugCollisionChecks = document.getElementById('debug-collision-checks');
@@ -372,7 +374,7 @@ function startAudioAndGame(scheme) {
 
         startScreen.style.display = 'none';
         setupInputListeners();
-        animate(); // Start the game loop
+        animate(); // FIX: Anropar 'animate()' korrekt istället för 'gameLoop()' för att starta spellopen.
     });
 }
 startButtonMobile.addEventListener('click', () => startAudioAndGame('mobile'));
@@ -464,7 +466,7 @@ const player = new Player(startPos.x, startPos.y, TILE_SIZE * 0.7, 'blue');
 // =================================================================================
 // --- UI & GAME LOGIC ---
 // =================================================================================
-function toggleCharacterSheet() { isPaused = !isPaused; characterSheetScreen.classList.toggle('hidden'); if (isPaused) { renderCharacterSheet(); } else { animate(); } }
+function toggleCharacterSheet() { isPaused = !isPaused; characterSheetScreen.classList.toggle('hidden'); if (isPaused) { renderCharacterSheet(); } }
 function calculateStats() {
     player.attributes = { ...player.baseAttributes };
     player.derivedStats = { healthRegen: 0, magicFind: 0, lifeLeech: 0 }; // Reset derived stats
@@ -626,8 +628,7 @@ function confirmLevelUp() {
     }
     levelUpScreen.classList.add('hidden');
     isPaused = false;
-    calculateStats();
-    animate();
+    
 }
 confirmLevelUpButton.addEventListener('click', confirmLevelUp);
 
