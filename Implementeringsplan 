@@ -1,0 +1,410 @@
+## Implementeringsplan för Project Rune Survive
+
+Jag har analyserat koden på GitHub och skapar nu en genomförbar implementeringsplan med kodlösningar för de mest kritiska områdena. Vi börjar med ljudsystemet och fortsätter med de andra prioriterade områdena.
+
+### 1. Ljudsystem med trådad ljudkö (Kritisk)
+
+**Problem:** Ljudkrock orsakar FPS-freeze
+
+**Lösning:** Implementera en trådsäker ljudkö med dedikerad ljudtråd
+
+```cpp
+// Audio/SoundManager.h
+#pragma once
+#include <SDL_mixer.h>
+#include <queue>
+#include <string>
+#include <mutex>
+#include <thread>
+#include <atomic>
+
+class SoundManager {
+public:
+    static void Init();
+    static void PlaySound(const std::string& soundName);
+    static void Cleanup();
+    static void SetVolume(int volume);
+
+private:
+    static std::queue<std::string> soundQueue;
+    static std::mutex queueMutex;
+    static std::atomic<bool> isRunning;
+    static std::thread soundThread;
+    
+    static void SoundThreadFunction();
+};
+```
+
+```cpp
+// Audio/SoundManager.cpp
+#include "SoundManager.h"
+#include "ResourceManager.h"
+#include <iostream>
+
+std::queue<std::string> SoundManager::soundQueue;
+std::mutex SoundManager::queueMutex;
+std::atomic<bool> SoundManager::isRunning(false);
+std::thread SoundManager::soundThread;
+
+void SoundManager::Init() {
+    isRunning = true;
+    soundThread = std::thread(SoundThreadFunction);
+    Mix_AllocateChannels(32);  // Allokera tillräckligt med ljudkanaler
+}
+
+void SoundManager::PlaySound(const std::string& soundName) {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    soundQueue.push(soundName);
+}
+
+void SoundManager::Cleanup() {
+    isRunning = false;
+    if (soundThread.joinable()) {
+        soundThread.join();
+    }
+}
+
+void SoundManager::SetVolume(int volume) {
+    Mix_Volume(-1, volume);  // Sätt volym för alla kanaler
+}
+
+void SoundManager::SoundThreadFunction() {
+    while (isRunning) {
+        std::string soundName;
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            if (!soundQueue.empty()) {
+                soundName = soundQueue.front();
+                soundQueue.pop();
+            }
+        }
+
+        if (!soundName.empty()) {
+            Mix_Chunk* sound = ResourceManager::GetSound(soundName);
+            if (sound) {
+                int channel = Mix_PlayChannel(-1, sound, 0);
+                if (channel == -1) {
+                    std::cerr << "Failed to play sound: " << Mix_GetError() << std::endl;
+                }
+            }
+        }
+        
+        // Minska CPU-belastning
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+}
+```
+
+### 2. Minneshantering & Resursrensning (Kritisk)
+
+**Problem:** Minnesläckor i ResourceManager
+
+**Lösning:** Implementera korrekt resursdestruktion
+
+```cpp
+// Core/ResourceManager.cpp
+void ResourceManager::Cleanup() {
+    // Rensa texturer
+    for (auto& [name, texture] : textures) {
+        if (texture) {
+            SDL_DestroyTexture(texture);
+            texture = nullptr;
+        }
+    }
+    textures.clear();
+
+    // Rensa ljud
+    for (auto& [name, sound] : sounds) {
+        if (sound) {
+            Mix_FreeChunk(sound);
+            sound = nullptr;
+        }
+    }
+    sounds.clear();
+
+    // Rensa typsnitt
+    for (auto& [name, font] : fonts) {
+        if (font) {
+            TTF_CloseFont(font);
+            font = nullptr;
+        }
+    }
+    fonts.clear();
+
+    // Rensa shaders
+    for (auto& [name, shader] : shaders) {
+        if (shader) {
+            glDeleteProgram(shader);
+        }
+    }
+    shaders.clear();
+}
+```
+
+### 3. FPS-reglering & Tidsstyrning (Hög prioritet)
+
+**Problem:** Ingen FPS-begränsning orsakar hög CPU-användning
+
+**Lösning:** Implementera frame-timing med SDL_GetTicks()
+
+```cpp
+// Core/GameLoop.cpp
+void GameLoop::Run() {
+    const int TARGET_FPS = 144;
+    const int FRAME_DELAY = 1000 / TARGET_FPS;
+    
+    Uint32 frameStart;
+    int frameTime;
+    
+    isRunning = true;
+    
+    while (isRunning) {
+        frameStart = SDL_GetTicks();
+        
+        // 1. Händelsehantering
+        HandleEvents();
+        
+        // 2. Uppdatera spellogik
+        Update();
+        
+        // 3. Rendera
+        Render();
+        
+        // 4. Reglera FPS
+        frameTime = SDL_GetTicks() - frameStart;
+        if (FRAME_DELAY > frameTime) {
+            SDL_Delay(FRAME_DELAY - frameTime);
+        }
+        
+        // Uppdatera FPS-räknare (för debug)
+        currentFPS = 1000.0f / (SDL_GetTicks() - frameStart);
+    }
+}
+```
+
+### 4. Kollisionsoptimering med Spatial Grid (Hög prioritet)
+
+**Problem:** O(n²) kollisionsdetektering orsakar lagg
+
+**Lösning:** Implementera spatial partitioning
+
+```cpp
+// Physics/CollisionSystem.cpp
+void CollisionSystem::Update(std::vector<Entity>& entities) {
+    const int GRID_SIZE = 128;  // Anpassa baserat på spelvärlden
+    std::unordered_map<GridKey, std::vector<Entity*>, GridKeyHash> grid;
+    
+    // 1. Fyll griden
+    for (auto& entity : entities) {
+        if (entity.HasComponent<ColliderComponent>()) {
+            int gridX = static_cast<int>(entity.position.x) / GRID_SIZE;
+            int gridY = static_cast<int>(entity.position.y) / GRID_SIZE;
+            grid[{gridX, gridY}].push_back(&entity);
+        }
+    }
+    
+    // 2. Kolla kollisioner per cell
+    for (auto& [key, entitiesInCell] : grid) {
+        for (size_t i = 0; i < entitiesInCell.size(); ++i) {
+            for (size_t j = i + 1; j < entitiesInCell.size(); ++j) {
+                if (CheckCollision(*entitiesInCell[i], *entitiesInCell[j])) {
+                    ResolveCollision(*entitiesInCell[i], *entitiesInCell[j]);
+                }
+            }
+        }
+    }
+}
+
+bool CollisionSystem::CheckCollision(const Entity& a, const Entity& b) {
+    const auto& colliderA = a.GetComponent<ColliderComponent>();
+    const auto& colliderB = b.GetComponent<ColliderComponent>();
+    
+    return (a.position.x < b.position.x + colliderB.size.x &&
+            a.position.x + colliderA.size.x > b.position.x &&
+            a.position.y < b.position.y + colliderB.size.y &&
+            a.position.y + colliderA.size.y > b.position.y);
+}
+```
+
+### 5. Event-Bus System (Medel prioritet)
+
+**Lösning:** Implementera ett centralt event-system
+
+```cpp
+// Core/EventBus.h
+#pragma once
+#include <functional>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <mutex>
+
+class EventBus {
+public:
+    using Listener = std::function<void(const void*)>;
+    
+    static void Subscribe(const std::string& eventType, Listener listener);
+    static void Unsubscribe(const std::string& eventType, Listener listener);
+    static void Publish(const std::string& eventType, const void* eventData = nullptr);
+
+private:
+    static std::unordered_map<std::string, std::vector<Listener>> listeners;
+    static std::mutex mutex;
+};
+```
+
+```cpp
+// Core/EventBus.cpp
+#include "EventBus.h"
+
+std::unordered_map<std::string, std::vector<EventBus::Listener>> EventBus::listeners;
+std::mutex EventBus::mutex;
+
+void EventBus::Subscribe(const std::string& eventType, Listener listener) {
+    std::lock_guard<std::mutex> lock(mutex);
+    listeners[eventType].push_back(listener);
+}
+
+void EventBus::Publish(const std::string& eventType, const void* eventData) {
+    std::vector<Listener> currentListeners;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (listeners.find(eventType) != listeners.end()) {
+            currentListeners = listeners[eventType];
+        }
+    }
+    
+    for (auto& listener : currentListeners) {
+        listener(eventData);
+    }
+}
+
+// Exempel på användning:
+// Deklarera event
+struct CollisionEvent {
+    Entity* entityA;
+    Entity* entityB;
+};
+
+// Prenumerera på event
+EventBus::Subscribe("COLLISION", [](const void* eventData) {
+    const CollisionEvent* collision = static_cast<const CollisionEvent*>(eventData);
+    SoundManager::PlaySound("impact");
+    ParticleSystem::SpawnExplosion(collision->entityA->position);
+});
+
+// Publicera event
+CollisionEvent event{&entityA, &entityB};
+EventBus::Publish("COLLISION", &event);
+```
+
+### 6. Dependency Injection Container (Medel prioritet)
+
+**Lösning:** Skapa en DI-container för enklare beroendehantering
+
+```cpp
+// Core/DIContainer.h
+#pragma once
+#include <unordered_map>
+#include <any>
+#include <typeindex>
+
+class DIContainer {
+public:
+    template<typename T>
+    static void Register(T* service) {
+        services[typeid(T)] = service;
+    }
+    
+    template<typename T>
+    static T* Resolve() {
+        auto it = services.find(typeid(T));
+        if (it != services.end()) {
+            return std::any_cast<T*>(it->second);
+        }
+        return nullptr;
+    }
+
+private:
+    static std::unordered_map<std::type_index, std::any> services;
+};
+
+// Initialisering i main.cpp
+DIContainer::Register(new SoundManager());
+DIContainer::Register(new PhysicsSystem());
+
+// Användning i andra klasser
+auto soundManager = DIContainer::Resolve<SoundManager>();
+auto physicsSystem = DIContainer::Resolve<PhysicsSystem>();
+```
+
+### 7. Debug Overlay & Profileringsverktyg (Låg prioritet)
+
+**Lösning:** Implementera en in-game debug overlay
+
+```cpp
+// Debug/DebugOverlay.cpp
+void DebugOverlay::Render(SDL_Renderer* renderer) {
+    // Visa FPS
+    RenderText(renderer, 10, 10, "FPS: " + std::to_string(currentFPS));
+    
+    // Visa entitetsräknare
+    int entityCount = EntityManager::GetInstance().GetEntityCount();
+    RenderText(renderer, 10, 30, "Entities: " + std::to_string(entityCount));
+    
+    // Visa minnesanvändning (förenklad)
+    RenderText(renderer, 10, 50, "Memory: " + std::to_string(GetMemoryUsage()) + " MB");
+    
+    // Visa ljudköstatus
+    int soundQueueSize = SoundManager::GetQueueSize();
+    RenderText(renderer, 10, 70, "Sounds Queued: " + std::to_string(soundQueueSize));
+}
+
+void DebugOverlay::ToggleVisibility() {
+    isVisible = !isVisible;
+}
+```
+
+### Implementeringssekvens
+
+1. **Dag 1:** Ljudsystem och minneshantering
+   - Implementera SoundManager med trådad kö
+   - Fixa resursrensning i ResourceManager
+   - Testa med intensiv ljudanvändning
+
+2. **Dag 2:** Prestandakärna
+   - Implementera FPS-reglering
+   - Bygg CollisionSystem med spatial grid
+   - Optimera rendering med textur-caching
+
+3. **Dag 3:** Systemarkitektur
+   - Implementera EventBus
+   - Skapa DIContainer
+   - Refaktorera koden för att använda de nya systemen
+
+4. **Dag 4:** Testning & Debug
+   - Implementera DebugOverlay
+   - Skapa enhetstester för kritiska system
+   - Köra prestandatester med många entiteter
+
+5. **Dag 5:** CI & Dokumentation
+   - Sätt upp GitHub Actions CI-pipeline
+   - Generera dokumentation med Doxygen
+   - Skapa en stabil release
+
+### Teststrategi
+
+1. **Ljudtest:** Spela 50+ ljud samtidigt
+2. **Prestandatest:** Simulera 1000+ entiteter
+3. **Minne:** Köra spelet i 1 timme och övervaka minnesanvändning
+4. **Kollision:** Testa med tätt packade objekt
+5. **Regression:** Köra befintliga tester efter varje större ändring
+
+Denna plan adresserar alla kritiska områden vi identifierat och kommer att:
+- Eliminera FPS-freeze problemet
+- Fixa minnesläckor
+- Förbättra prestandan avsevärt
+- Göra koden mer underhållbar
+- Minska framtida buggar
+
+Jag rekommenderar att börja implementera ljudsystemet först eftersom det löser det mest akuta problemet. Vill du att jag ska gå in mer på detalj för någon specifik del av implementeringen?
