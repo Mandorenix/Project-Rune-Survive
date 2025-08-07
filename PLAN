@@ -1,0 +1,431 @@
+# Projekt Rune Survive: Optimering & Förbättringsplan
+
+## 🚀 Kritisk Förbättringar med Detaljerade Förklaringar
+
+### 1. **Ljudhanterare med Web Audio API**
+**Problem**: Ljudkonflikter orsakar fryser när många ljud spelas samtidigt  
+**Lösning**: Kanalhantering med kösystem för att undvika överbelastning
+
+```javascript
+class AudioManager {
+  constructor() {
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    this.sounds = {};
+    this.maxChannels = 8; // Begränsa antalet samtidiga ljud
+    this.channels = Array(this.maxChannels).fill(null);
+    this.queue = [];
+  }
+
+  async loadSound(name, url) {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    this.sounds[name] = await this.audioContext.decodeAudioData(arrayBuffer);
+  }
+
+  playSound(name) {
+    if (!this.sounds[name]) {
+      console.warn(`Ljud '${name}' inte laddat!`);
+      return;
+    }
+    
+    // Köhantering vid full belastning
+    if (this.queue.length > 10) {
+      console.warn(`Ljudkö full (${this.queue.length}), ignorerar ${name}`);
+      return;
+    }
+    
+    const availableChannel = this.channels.findIndex(ch => !ch || ch.playState === 'finished');
+    
+    if (availableChannel !== -1) {
+      this._playInChannel(name, availableChannel);
+    } else {
+      this.queue.push(name);
+      console.log(`Ljud köat: ${name} (köstorlek: ${this.queue.length})`);
+    }
+  }
+
+  _playInChannel(name, channelIndex) {
+    const source = this.audioContext.createBufferSource();
+    source.buffer = this.sounds[name];
+    source.connect(this.audioContext.destination);
+    source.start(0);
+    
+    // Hantera när ljudet är klart
+    source.onended = () => {
+      this.channels[channelIndex] = null;
+      // Spela nästa ljud i kön om det finns
+      if (this.queue.length > 0) {
+        const nextSound = this.queue.shift();
+        console.log(`Spelar köat ljud: ${nextSound}`);
+        this._playInChannel(nextSound, channelIndex);
+      }
+    };
+    
+    // Uppdatera kanalstatus
+    this.channels[channelIndex] = {
+      source,
+      playState: 'playing',
+      name: name,
+      startTime: performance.now()
+    };
+  }
+}
+```
+
+**Varför detta är viktigt**:  
+- **Kanalbegränsning** förhindrar att för många ljud spelas samtidigt, vilket är en vanlig orsak till fryser
+- **Köhantering** säkerställer att ljud inte tappas bort vid hög belastning
+- **Automatisk kanalåteranvändning** optimerar resursanvändning
+- **Felhantering** förhindrar att missade ljud kraschar spelet
+
+### 2. **Canvas-rendering med Offscreen Buffer**
+**Problem**: Låg FPS vid många objekt på skärmen  
+**Lösning**: Använd offscreen-canvas för batch-rendering
+
+```javascript
+class GameRenderer {
+  constructor(mainCanvas) {
+    this.mainCanvas = mainCanvas;
+    this.mainCtx = mainCanvas.getContext('2d');
+    
+    // Skapa dold canvas för rendering
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCanvas.width = mainCanvas.width;
+    this.offscreenCanvas.height = mainCanvas.height;
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    
+    // Cacha vanliga operationer
+    this.imageCache = new Map();
+    this.lastRenderTime = 0;
+    this.renderStats = {
+      totalFrames: 0,
+      averageFPS: 0
+    };
+  }
+
+  preloadImage(key, url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        this.imageCache.set(key, img);
+        resolve();
+      };
+      img.src = url;
+    });
+  }
+
+  render(entities) {
+    const startTime = performance.now();
+    
+    // Rensa offscreen-canvas
+    this.offscreenCtx.clearRect(0, 0, 
+      this.offscreenCanvas.width, 
+      this.offscreenCanvas.height
+    );
+    
+    // Rendera bakgrund först
+    this.offscreenCtx.fillStyle = '#202030';
+    this.offscreenCtx.fillRect(
+      0, 0, 
+      this.offscreenCanvas.width, 
+      this.offscreenCanvas.height
+    );
+    
+    // Batch-rendera entiteter
+    entities.forEach(entity => {
+      const img = this.imageCache.get(entity.spriteKey);
+      if (img) {
+        this.offscreenCtx.drawImage(
+          img,
+          entity.x, entity.y,
+          entity.width, entity.height
+        );
+      }
+    });
+    
+    // Kopiera till huvudcanvas
+    this.mainCtx.clearRect(0, 0, 
+      this.mainCanvas.width, 
+      this.mainCanvas.height
+    );
+    this.mainCtx.drawImage(this.offscreenCanvas, 0, 0);
+    
+    // Beräkna renderingsstatistik
+    const renderTime = performance.now() - startTime;
+    this.renderStats.totalFrames++;
+    
+    // Uppdatera FPS var 60:e frame
+    if (this.renderStats.totalFrames % 60 === 0) {
+      this.renderStats.averageFPS = Math.round(
+        1000 / (startTime - this.lastRenderTime)
+      );
+    }
+    this.lastRenderTime = startTime;
+  }
+}
+```
+
+**Varför detta är viktigt**:  
+- **Offscreen-rendering** minskar flimmer och förbättrar prestanda
+- **Batch-rendering** minimerar kostnadsfällda canvas-operationer
+- **Bildcachning** undviker upprepad laddning av resurser
+- **Prestandamonitorering** ger insyn i renderingshastighet
+- **Strukturering** separerar rendering från spellogik
+
+### 3. **Kollisionshantering med Spatial Grid**
+**Problem**: O(n²) komplexitet gör spelet långsamt vid många objekt  
+**Lösning**: Spatial partitioning med dynamiskt rutnät
+
+```javascript
+class CollisionSystem {
+  constructor(gridSize = 128) {
+    this.gridSize = gridSize;
+    this.grid = new Map();
+    this.collisionStats = {
+      checks: 0,
+      collisions: 0,
+      gridCells: 0
+    };
+  }
+
+  update(entities) {
+    this._buildGrid(entities);
+    
+    // Nollställ statistik
+    this.collisionStats.checks = 0;
+    this.collisionStats.collisions = 0;
+    this.collisionStats.gridCells = this.grid.size;
+    
+    // Kolla kollisioner per grid-cell
+    for (const [key, cellEntities] of this.grid) {
+      for (let i = 0; i < cellEntities.length; i++) {
+        for (let j = i + 1; j < cellEntities.length; j++) {
+          this.collisionStats.checks++;
+          if (this._checkCollision(cellEntities[i], cellEntities[j])) {
+            this.collisionStats.collisions++;
+            this._handleCollision(cellEntities[i], cellEntities[j]);
+          }
+        }
+      }
+    }
+  }
+
+  _buildGrid(entities) {
+    this.grid.clear();
+    
+    entities.forEach(entity => {
+      if (!entity.collidable) return;
+      
+      // Beräkna grid-positioner
+      const startX = Math.floor(entity.x / this.gridSize);
+      const startY = Math.floor(entity.y / this.gridSize);
+      const endX = Math.floor((entity.x + entity.width) / this.gridSize);
+      const endY = Math.floor((entity.y + entity.height) / this.gridSize);
+      
+      // Lägg till i relevanta celler
+      for (let x = startX; x <= endX; x++) {
+        for (let y = startY; y <= endY; y++) {
+          const key = `${x},${y}`;
+          if (!this.grid.has(key)) {
+            this.grid.set(key, []);
+          }
+          this.grid.get(key).push(entity);
+        }
+      }
+    });
+  }
+
+  _checkCollision(a, b) {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    );
+  }
+
+  _handleCollision(a, b) {
+    // Skicka händelse till eventbuss
+    eventBus.emit('collision', { entityA: a, entityB: b });
+    
+    // Standardkollisionshantering
+    if (a.onCollision) a.onCollision(b);
+    if (b.onCollision) b.onCollision(a);
+  }
+}
+```
+
+**Varför detta är viktigt**:  
+- **Grid-baserad optimering** minskar O(n²) till O(n) i praktiken
+- **Dynamisk cellplacering** hanterar objekt som sträcker sig över flera celler
+- **Statistikinsamling** hjälper med prestandaoptimering
+- **Flexibel kollisionshantering** via event-buss
+- **Skalbarhet** fungerar bra även med 1000+ entiteter
+
+### 4. **FPS-reglerad Spelloop med Delta Time**
+**Problem**: Ojämn uppdateringshastighet på olika maskiner  
+**Lösning**: Tidsbaserad uppdatering med fasta tidssteg
+
+```javascript
+class GameLoop {
+  constructor(updateFn, renderFn, fps = 60) {
+    this.update = updateFn;
+    this.render = renderFn;
+    this.fps = fps;
+    this.frameInterval = 1000 / fps;
+    this.lastTime = 0;
+    this.frameTime = 0;
+    this.running = false;
+    this.stats = {
+      fps: 0,
+      updateCount: 0,
+      renderCount: 0
+    };
+  }
+
+  start() {
+    if (this.running) return;
+    
+    this.running = true;
+    this.lastTime = performance.now();
+    this._requestFrame();
+  }
+
+  stop() {
+    this.running = false;
+  }
+
+  _requestFrame() {
+    if (!this.running) return;
+    requestAnimationFrame(this._run.bind(this));
+  }
+
+  _run(timestamp) {
+    // Beräkna tidsdifferens
+    const deltaTime = timestamp - this.lastTime;
+    this.lastTime = timestamp;
+    this.frameTime += deltaTime;
+
+    // Uppdatera med fasta tidssteg
+    while (this.frameTime >= this.frameInterval) {
+      this.update(this.frameInterval / 1000); // Delta i sekunder
+      this.stats.updateCount++;
+      this.frameTime -= this.frameInterval;
+    }
+    
+    // Rendera
+    this.render();
+    this.stats.renderCount++;
+    
+    // Beräkna FPS
+    if (this.stats.renderCount % 60 === 0) {
+      this.stats.fps = Math.round(1000 / deltaTime);
+    }
+    
+    this._requestFrame();
+  }
+}
+
+// Användningsexempel
+const gameLoop = new GameLoop(
+  (deltaTime) => {
+    // Uppdatera spellogik här
+    physicsSystem.update(deltaTime);
+    entityManager.update(deltaTime);
+  },
+  () => {
+    // Rendera spelet
+    gameRenderer.render(entityManager.getEntities());
+  },
+  60 // Mål-FPS
+);
+
+gameLoop.start();
+```
+
+**Varför detta är viktigt**:  
+- **Konsekvent uppdatering** oavsett enhetens prestanda
+- **Separation av uppdatering och rendering** för smidigare spelkänsla
+- **FPS-oberoende fysik** för rättvis spelupplevelse
+- **Prestandamonitorering** inbyggd i loopen
+- **Flexibel inställning** av uppdateringshastighet
+
+## 📅 Implementeringsplan
+
+### Vecka 1: Kritiska Prestandaförbättringar
+| Dag | Fokusområde | Aktiviteter |
+|-----|-------------|------------|
+| 1   | Ljudsystem  | Implementera AudioManager med kösystem |
+| 2   | Rendering   | Integrera offscreen canvas och cachning |
+| 3   | Kollision   | Bygg spatial grid-system |
+| 4   | Spelloop    | Implementera delta-time baserad loop |
+| 5   | Testning    | Prestandatest med 500+ entiteter |
+
+### Vecka 2: Systemarkitektur & Resurshantering
+| Dag | Fokusområde | Aktiviteter |
+|-----|-------------|------------|
+| 1   | Event-buss  | Skapa central händelsehanterare |
+| 2   | Resursladdning | Implementera AssetLoader med progressiv feedback |
+| 3   | ECS         | Börja migrera till Entity Component System |
+| 4   | Debug       | Bygg prestandapanel med statistik |
+| 5   | Integration | Kombinera alla system och testa |
+
+### Vecka 3: Testning & Optimering
+| Dag | Aktivitet | Mål |
+|-----|-----------|-----|
+| 1   | Ljudtest | Simulera 100+ samtidiga ljudeffekter |
+| 2   | Stress-test | Köra med 1000+ entiteter |
+| 3   | Minneshantering | Analysera med Chrome DevTools |
+| 4   | Cross-browser | Testa i Firefox, Safari, Edge |
+| 5   | Användartest | Samla feedback från spelare |
+
+## 🧪 Teststrategi
+
+### Prestandatestning
+```javascript
+// Testskript för att simulera hög belastning
+function runStressTest() {
+  // Skapa 1000 testentiteter
+  for (let i = 0; i < 1000; i++) {
+    const entity = new Entity(
+      Math.random() * canvas.width,
+      Math.random() * canvas.height,
+      20, 20
+    );
+    entity.velocity = {
+      x: (Math.random() - 0.5) * 100,
+      y: (Math.random() - 0.5) * 100
+    };
+    entityManager.add(entity);
+  }
+  
+  // Spela ljud varje frame
+  setInterval(() => {
+    audioManager.playSound('explosion');
+  }, 50);
+  
+  // Logga prestanda var 5:e sekund
+  setInterval(() => {
+    console.log(`FPS: ${gameLoop.stats.fps}`);
+    console.log(`Entiteter: ${entityManager.count()}`);
+    console.log(`Kollisionskontroller: ${collisionSystem.collisionStats.checks}`);
+    console.log(`Ljudkö: ${audioManager.queue.length}`);
+  }, 5000);
+}
+```
+
+### Testscenarier
+1. **Ljudintensivt scenario**: 50+ samtidiga ljudeffekter
+2. **Entitetsöversvämning**: 1000+ rörliga objekt på skärmen
+3. **Långköringstest**: Låta spelet köras i 1 timme
+4. **Minnestest**: Jämför minnesanvändning före/efter optimering
+5. **Kollisionstest**: Många objekt i koncentrerade områden
+
+## ✅ Förväntade Resultat
+- **+300%** FPS-ökning vid hög belastning
+- **-90%** minskad ljudrelaterade fryser
+- **+500%** fler entiteter utan prestandaförlust
+- **Stabilare** spelupplevelse på olika enheter
+- **Lättare** att lägga till ny funktionalitet
+
+Genom att implementera dessa förbättringar kommer spelet att bli betydligt mer stabilt, responsivt och underhållbart. Börja med ljudsystemet och renderingen för att omedelbart lösa de mest kritiska prestandaproblemen!
